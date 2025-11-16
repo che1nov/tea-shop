@@ -1,0 +1,358 @@
+{
+  "dashboard": {
+    "title": "Ecommerce Services - Full Monitoring",
+    "tags": ["ecommerce", "go", "services", "full"],
+    "timezone": "browser",
+    "schemaVersion": 16,
+    "version": 1,
+    "refresh": "30s",
+    "templating": {
+      "list": [
+        {
+          "name": "job",
+          "type": "query",
+          "query": "label_values(up, job)",
+          "current": {
+            "text": "All",
+            "value": "$__all"
+          },
+          "includeAll": true,
+          "multi": true,
+          "allValue": ".*"
+        }
+      ]
+    },
+    "panels": [
+      {
+        "id": 1,
+        "title": "CPU Usage (%)",
+        "type": "gauge",
+        "gridPos": {"h": 4, "w": 4, "x": 0, "y": 0},
+        "targets": [
+          {
+            "expr": "avg(rate(process_cpu_seconds_total{job=~\"$job\"}[5m])) * 100",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "min": 0,
+            "max": 100,
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"value": 0, "color": "green"},
+                {"value": 50, "color": "yellow"},
+                {"value": 80, "color": "red"}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 2,
+        "title": "Memory Used (%)",
+        "type": "gauge",
+        "gridPos": {"h": 4, "w": 4, "x": 4, "y": 0},
+        "targets": [
+          {
+            "expr": "avg((go_memstats_heap_inuse_bytes{job=~\"$job\"} / go_memstats_heap_sys_bytes{job=~\"$job\"}) * 100)",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "min": 0,
+            "max": 100,
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"value": 0, "color": "green"},
+                {"value": 70, "color": "yellow"},
+                {"value": 90, "color": "red"}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 3,
+        "title": "Go Routines",
+        "type": "gauge",
+        "gridPos": {"h": 4, "w": 4, "x": 8, "y": 0},
+        "targets": [
+          {
+            "expr": "sum(go_goroutines{job=~\"$job\"})",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "short"
+          }
+        }
+      },
+      {
+        "id": 4,
+        "title": "Active Services",
+        "type": "stat",
+        "gridPos": {"h": 4, "w": 4, "x": 12, "y": 0},
+        "targets": [
+          {
+            "expr": "count(up{job=~\"$job\"} == 1)",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "short"
+          }
+        }
+      },
+      {
+        "id": 5,
+        "title": "Total Memory (MB)",
+        "type": "stat",
+        "gridPos": {"h": 4, "w": 4, "x": 16, "y": 0},
+        "targets": [
+          {
+            "expr": "sum(go_memstats_heap_sys_bytes{job=~\"$job\"}) / 1024 / 1024",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "mbytes"
+          }
+        }
+      },
+      {
+        "id": 6,
+        "title": "Uptime (days)",
+        "type": "stat",
+        "gridPos": {"h": 4, "w": 4, "x": 20, "y": 0},
+        "targets": [
+          {
+            "expr": "min(process_start_time_seconds{job=~\"$job\"})",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "dtdurations"
+          }
+        }
+      },
+      {
+        "id": 7,
+        "title": "CPU Usage by Service",
+        "type": "timeseries",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 4},
+        "targets": [
+          {
+            "expr": "rate(process_cpu_seconds_total{job=~\"$job\"}[5m]) * 100",
+            "legendFormat": "{{job}}",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "custom": {
+              "stacking": {
+                "group": "A",
+                "mode": "normal"
+              },
+              "fillOpacity": 80
+            }
+          }
+        },
+        "options": {
+          "legend": {
+            "displayMode": "table",
+            "placement": "bottom"
+          }
+        }
+      },
+      {
+        "id": 8,
+        "title": "Memory Usage by Service",
+        "type": "timeseries",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 4},
+        "targets": [
+          {
+            "expr": "go_memstats_heap_inuse_bytes{job=~\"$job\"} / 1024 / 1024",
+            "legendFormat": "{{job}} - In Use",
+            "refId": "A"
+          },
+          {
+            "expr": "go_memstats_heap_sys_bytes{job=~\"$job\"} / 1024 / 1024",
+            "legendFormat": "{{job}} - Allocated",
+            "refId": "B"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "mbytes",
+            "custom": {
+              "stacking": {
+                "group": "A",
+                "mode": "normal"
+              },
+              "fillOpacity": 80
+            }
+          }
+        },
+        "options": {
+          "legend": {
+            "displayMode": "table",
+            "placement": "bottom"
+          }
+        }
+      },
+      {
+        "id": 9,
+        "title": "Go Routines by Service",
+        "type": "timeseries",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 12},
+        "targets": [
+          {
+            "expr": "go_goroutines{job=~\"$job\"}",
+            "legendFormat": "{{job}}",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "short"
+          }
+        }
+      },
+      {
+        "id": 10,
+        "title": "HTTP Requests to Metrics",
+        "type": "timeseries",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 12},
+        "targets": [
+          {
+            "expr": "rate(promhttp_metric_handler_requests_total{job=~\"$job\"}[5m])",
+            "legendFormat": "{{job}} - {{code}}",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "reqps"
+          }
+        }
+      },
+      {
+        "id": 11,
+        "title": "Memory Details",
+        "type": "timeseries",
+        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 20},
+        "targets": [
+          {
+            "expr": "go_memstats_heap_alloc_bytes{job=~\"$job\"} / 1024 / 1024",
+            "legendFormat": "{{job}} - Allocated",
+            "refId": "A"
+          },
+          {
+            "expr": "go_memstats_heap_idle_bytes{job=~\"$job\"} / 1024 / 1024",
+            "legendFormat": "{{job}} - Idle",
+            "refId": "B"
+          },
+          {
+            "expr": "go_memstats_heap_inuse_bytes{job=~\"$job\"} / 1024 / 1024",
+            "legendFormat": "{{job}} - In Use",
+            "refId": "C"
+          },
+          {
+            "expr": "go_memstats_heap_sys_bytes{job=~\"$job\"} / 1024 / 1024",
+            "legendFormat": "{{job}} - System",
+            "refId": "D"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "mbytes",
+            "custom": {
+              "stacking": {
+                "group": "A",
+                "mode": "normal"
+              },
+              "fillOpacity": 80
+            }
+          }
+        },
+        "options": {
+          "legend": {
+            "displayMode": "table",
+            "placement": "bottom"
+          }
+        }
+      },
+      {
+        "id": 12,
+        "title": "GC (Garbage Collection) Stats",
+        "type": "timeseries",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 28},
+        "targets": [
+          {
+            "expr": "rate(go_gc_duration_seconds_sum{job=~\"$job\"}[5m])",
+            "legendFormat": "{{job}} - GC Duration",
+            "refId": "A"
+          },
+          {
+            "expr": "rate(go_gc_duration_seconds_count{job=~\"$job\"}[5m])",
+            "legendFormat": "{{job}} - GC Count",
+            "refId": "B"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "short"
+          }
+        }
+      },
+      {
+        "id": 13,
+        "title": "Service Status Table",
+        "type": "table",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 28},
+        "targets": [
+          {
+            "expr": "up{job=~\"$job\"}",
+            "refId": "A",
+            "format": "table"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "displayMode": "list"
+            },
+            "mappings": [
+              {
+                "type": "value",
+                "options": {
+                  "0": {"text": "DOWN", "color": "red"},
+                  "1": {"text": "UP", "color": "green"}
+                }
+              }
+            ]
+          }
+        }
+      }
+    ]
+  }
+}
+
+
+
+
+
+
+

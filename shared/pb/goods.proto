@@ -1,0 +1,86 @@
+syntax = "proto3";
+
+package pb;
+
+option go_package = "github.com/che1nov/tea-shop/shared/pb";
+
+service GoodsService {
+  rpc CreateGood(CreateGoodRequest) returns (Good) {}
+  rpc GetGood(GetGoodRequest) returns (Good) {}
+  rpc ListGoods(ListGoodsRequest) returns (ListGoodsResponse) {}
+  rpc UpdateGood(UpdateGoodRequest) returns (Good) {}
+  rpc DeleteGood(DeleteGoodRequest) returns (DeleteGoodResponse) {}
+  rpc CheckStock(CheckStockRequest) returns (CheckStockResponse) {}
+  rpc ReserveStock(ReserveStockRequest) returns (ReserveStockResponse) {}
+}
+
+message Good {
+  int64 id = 1;
+  string sku = 2;
+  string name = 3;
+  string description = 4;
+  double price = 5;
+  int32 stock = 6;
+  int64 created_at = 7;
+}
+
+message CreateGoodRequest {
+  string name = 1;
+  string description = 2;
+  double price = 3;
+  int32 stock = 4;
+  // SKU будет сгенерирован автоматически, если не указан
+  string sku = 5;
+}
+
+message GetGoodRequest {
+  int64 good_id = 1;
+}
+
+message ListGoodsRequest {
+  int32 limit = 1;
+  int32 offset = 2;
+}
+
+message ListGoodsResponse {
+  repeated Good goods = 1;
+  int32 total = 2;
+}
+
+message CheckStockRequest {
+  int64 good_id = 1;
+  int32 quantity = 2;
+}
+
+message CheckStockResponse {
+  bool available = 1;
+}
+
+message ReserveStockRequest {
+  int64 good_id = 1;
+  int32 quantity = 2;
+  int64 order_id = 3;
+}
+
+message ReserveStockResponse {
+  bool success = 1;
+  string error = 2;
+}
+
+message UpdateGoodRequest {
+  int64 id = 1;
+  string name = 2;
+  string description = 3;
+  double price = 4;
+  int32 stock = 5;
+  string sku = 6;
+}
+
+message DeleteGoodRequest {
+  int64 good_id = 1;
+}
+
+message DeleteGoodResponse {
+  bool success = 1;
+  string message = 2;
+}

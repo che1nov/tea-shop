@@ -1,0 +1,68 @@
+# Binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+main
+**/main
+
+# Test binary
+*.test
+
+# Output of the go coverage tool
+*.out
+coverage.out
+
+# Dependency directories
+vendor/
+node_modules/
+
+# Go workspace file
+go.work
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Logs
+*.log
+/tmp/*.log
+
+# Environment variables
+.env
+.env.local
+
+# Build outputs
+dist/
+build/
+
+# Generated protobuf files (keep proto files, ignore generated)
+shared/pb/*.pb.go
+shared/pb/*_grpc.pb.go
+!shared/pb/*.proto
+
+# Generated Swagger files (keep docs.go, ignore json/yaml)
+api-gateway/docs/swagger.json
+api-gateway/docs/swagger.yaml
+
+# Frontend
+frontend/dist/
+frontend/node_modules/
+frontend/.vite/
+
+# Docker
+docker-compose.override.yml
+
+# Temporary files
+*.tmp
+*.temp
+*.pid
+
+# OS
+Thumbs.db
+

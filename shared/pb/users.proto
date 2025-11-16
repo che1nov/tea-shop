@@ -1,0 +1,52 @@
+syntax = "proto3";
+
+package pb;
+
+option go_package = "github.com/che1nov/tea-shop/shared/pb";
+
+service UsersService {
+  rpc GetUser(GetUserRequest) returns (User) {}
+  rpc CreateUser(CreateUserRequest) returns (User) {}
+  rpc Login(LoginRequest) returns (LoginResponse) {}
+  rpc ValidateToken(ValidateTokenRequest) returns (ValidateTokenResponse) {}
+}
+
+message User {
+  int64 id = 1;
+  string email = 2;
+  string name = 3;
+  string password_hash = 4;
+  string role = 5; // "user" или "admin"
+  int64 created_at = 6;
+}
+
+message GetUserRequest {
+  int64 user_id = 1;
+}
+
+message CreateUserRequest {
+  string email = 1;
+  string name = 2;
+  string password = 3;
+}
+
+message LoginRequest {
+  string email = 1;
+  string password = 2;
+}
+
+message LoginResponse {
+  string token = 1;
+  User user = 2;
+}
+
+message ValidateTokenRequest {
+  string token = 1;
+}
+
+message ValidateTokenResponse {
+  bool valid = 1;
+  int64 user_id = 2;
+  string email = 3;
+  string role = 4; // Роль пользователя из токена
+}

@@ -1,0 +1,46 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: 'users-service'
+    static_configs:
+      - targets: ['host.docker.internal:9001']
+        labels:
+          service: 'users-service'
+
+  - job_name: 'goods-service'
+    static_configs:
+      - targets: ['host.docker.internal:9002']
+        labels:
+          service: 'goods-service'
+
+  - job_name: 'order-service'
+    static_configs:
+      - targets: ['host.docker.internal:9003']
+        labels:
+          service: 'order-service'
+
+  - job_name: 'payment-service'
+    static_configs:
+      - targets: ['host.docker.internal:9004']
+        labels:
+          service: 'payment-service'
+
+  - job_name: 'delivery-service'
+    static_configs:
+      - targets: ['host.docker.internal:9005']
+        labels:
+          service: 'delivery-service'
+
+  - job_name: 'notify-service'
+    static_configs:
+      - targets: ['host.docker.internal:9006']
+        labels:
+          service: 'notify-service'
+
+  - job_name: 'api-gateway'
+    static_configs:
+      - targets: ['host.docker.internal:9007']
+        labels:
+          service: 'api-gateway'

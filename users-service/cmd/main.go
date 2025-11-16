@@ -1,0 +1,158 @@
+package main
+
+import (
+	"database/sql"
+	"fmt"
+	"net"
+	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
+
+	_ "github.com/lib/pq"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/health"
+	"google.golang.org/grpc/health/grpc_health_v1"
+	"google.golang.org/grpc/reflection"
+
+	pb "github.com/che1nov/tea-shop/shared/pb"
+	"github.com/che1nov/tea-shop/shared/pkg/logger"
+	"github.com/che1nov/tea-shop/users-service/config"
+	"github.com/che1nov/tea-shop/users-service/internal/handler"
+	"github.com/che1nov/tea-shop/users-service/internal/repository"
+	"github.com/che1nov/tea-shop/users-service/internal/service"
+)
+
+func main() {
+	// Инициализируем logger
+	logger.Init()
+
+	cfg := config.Load()
+
+	// Подключение к БД
+	dbConnStr := fmt.Sprintf(
+		"user=%s password=%s dbname=%s host=%s port=%s sslmode=disable",
+		cfg.Database.User,
+		cfg.Database.Password,
+		cfg.Database.Name,
+		cfg.Database.Host,
+		cfg.Database.Port,
+	)
+
+	db, err := sql.Open("postgres", dbConnStr)
+	if err != nil {
+		logger.Error("Failed to open database", "error", err)
+		panic(err)
+	}
+
+	// Проверяем подключение к БД
+	if err := db.Ping(); err != nil {
+		logger.Error("Failed to connect to database", "error", err)
+		panic(fmt.Sprintf("failed to connect to database: %v", err))
+	}
+	logger.Info("Database connection established")
+
+	// Создаём таблицы
+	createTablesSQL := `
+		CREATE TABLE IF NOT EXISTS users (
+			id SERIAL PRIMARY KEY,
+			email VARCHAR(255) UNIQUE NOT NULL,
+			name VARCHAR(255) NOT NULL,
+			password_hash VARCHAR(255) NOT NULL,
+			created_at TIMESTAMP NOT NULL,
+			updated_at TIMESTAMP NOT NULL
+		);
+		CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+	`
+	if _, err := db.Exec(createTablesSQL); err != nil {
+		panic(err)
+	}
+
+	// Инициализируем слои
+	repo := repository.New(db)
+	// Логируем админские credentials для отладки (только email, не password)
+	logger.Info("Admin credentials configured", "email", cfg.Admin.Email, "password_set", cfg.Admin.Password != "")
+	svc := service.New(repo, cfg.JWT.Secret, cfg.Admin.Email, cfg.Admin.Password)
+	hdlr := handler.New(svc)
+
+	// Запускаем HTTP сервер для метрик Prometheus ПЕРВЫМ (даже если gRPC не запустится)
+	metricsPort := 9001
+	metricsMux := http.NewServeMux()
+	metricsMux.Handle("/metrics", promhttp.Handler())
+	metricsServer := &http.Server{
+		Addr:    fmt.Sprintf(":%d", metricsPort),
+		Handler: metricsMux,
+	}
+
+	// Канал для получения сигналов ОС
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+
+	// Запускаем HTTP сервер для метрик в отдельной горутине (ПЕРВЫМ)
+	go func() {
+		logger.Info("Users Service metrics server starting", "port", metricsPort)
+		if err := metricsServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			logger.Error("Metrics server error", "error", err)
+		}
+	}()
+
+	// Небольшая задержка для запуска HTTP сервера метрик
+	time.Sleep(100 * time.Millisecond)
+
+	// Запускаем gRPC сервер
+	listener, err := net.Listen("tcp", fmt.Sprintf(":%d", cfg.Server.Port))
+	if err != nil {
+		logger.Error("Failed to create gRPC listener", "error", err, "port", cfg.Server.Port)
+		logger.Warn("gRPC server will not start, but metrics server is running")
+		<-sigChan // Ждем сигнал остановки
+		logger.Info("Shutting down Users Service...")
+		if err := metricsServer.Close(); err != nil {
+			logger.Error("Error closing metrics server", "error", err)
+		}
+		if err := db.Close(); err != nil {
+			logger.Error("Error closing database", "error", err)
+		}
+		logger.Info("Users Service stopped")
+		return
+	}
+
+	grpcServer := grpc.NewServer()
+	pb.RegisterUsersServiceServer(grpcServer, hdlr)
+
+	// Health check
+	healthServer := health.NewServer()
+	grpc_health_v1.RegisterHealthServer(grpcServer, healthServer)
+	healthServer.SetServingStatus("pb.UsersService", grpc_health_v1.HealthCheckResponse_SERVING)
+
+	// Enable gRPC reflection for easier testing
+	reflection.Register(grpcServer)
+
+	// Запускаем gRPC сервер в отдельной горутине
+	go func() {
+		logger.Info("Users Service gRPC server started", "port", cfg.Server.Port)
+		if err := grpcServer.Serve(listener); err != nil {
+			logger.Error("gRPC server error", "error", err)
+		}
+	}()
+
+	// Ожидаем сигнал для graceful shutdown
+	<-sigChan
+	logger.Info("Shutting down Users Service...")
+
+	// Graceful shutdown HTTP сервера метрик
+	if err := metricsServer.Close(); err != nil {
+		logger.Error("Error closing metrics server", "error", err)
+	}
+
+	// Graceful shutdown gRPC сервера
+	grpcServer.GracefulStop()
+
+	// Закрываем соединение с БД
+	if err := db.Close(); err != nil {
+		logger.Error("Error closing database", "error", err)
+	}
+
+	logger.Info("Users Service stopped")
+}
