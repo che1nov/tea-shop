@@ -44,7 +44,7 @@ func TestNew(t *testing.T) {
 	mockRepo := new(MockRepository)
 	jwtSecret := "test-secret"
 
-	service := New(mockRepo, jwtSecret)
+	service := New(mockRepo, jwtSecret, "", "")
 
 	assert.NotNil(t, service)
 	assert.Equal(t, mockRepo, service.repo)
@@ -53,7 +53,7 @@ func TestNew(t *testing.T) {
 
 func TestCreateUser_Success(t *testing.T) {
 	mockRepo := new(MockRepository)
-	service := New(mockRepo, "test-secret")
+	service := New(mockRepo, "test-secret", "", "")
 	ctx := context.Background()
 
 	req := &model.CreateUserRequest{
@@ -80,7 +80,7 @@ func TestCreateUser_Success(t *testing.T) {
 
 func TestCreateUser_RepositoryError(t *testing.T) {
 	mockRepo := new(MockRepository)
-	service := New(mockRepo, "test-secret")
+	service := New(mockRepo, "test-secret", "", "")
 	ctx := context.Background()
 
 	req := &model.CreateUserRequest{
@@ -100,7 +100,7 @@ func TestCreateUser_RepositoryError(t *testing.T) {
 
 func TestGetUser_Success(t *testing.T) {
 	mockRepo := new(MockRepository)
-	service := New(mockRepo, "test-secret")
+	service := New(mockRepo, "test-secret", "", "")
 	ctx := context.Background()
 
 	expectedUser := &model.User{
@@ -121,7 +121,7 @@ func TestGetUser_Success(t *testing.T) {
 }
 
 func TestGenerateToken_Success(t *testing.T) {
-	service := New(new(MockRepository), "test-secret-key")
+	service := New(new(MockRepository), "test-secret-key", "", "")
 
 	user := &model.User{
 		ID:    1,
@@ -149,7 +149,7 @@ func TestGenerateToken_Success(t *testing.T) {
 }
 
 func TestValidateToken_ValidToken(t *testing.T) {
-	service := New(new(MockRepository), "test-secret-key")
+	service := New(new(MockRepository), "test-secret-key", "", "")
 
 	user := &model.User{
 		ID:    1,
@@ -169,7 +169,7 @@ func TestValidateToken_ValidToken(t *testing.T) {
 }
 
 func TestValidateToken_InvalidToken(t *testing.T) {
-	service := New(new(MockRepository), "test-secret-key")
+	service := New(new(MockRepository), "test-secret-key", "", "")
 
 	userID, email, err := service.ValidateToken("invalid-token")
 
@@ -179,8 +179,8 @@ func TestValidateToken_InvalidToken(t *testing.T) {
 }
 
 func TestValidateToken_WrongSecret(t *testing.T) {
-	service1 := New(new(MockRepository), "secret1")
-	service2 := New(new(MockRepository), "secret2")
+	service1 := New(new(MockRepository), "secret1", "", "")
+	service2 := New(new(MockRepository), "secret2", "", "")
 
 	user := &model.User{
 		ID:    1,
@@ -201,7 +201,7 @@ func TestValidateToken_WrongSecret(t *testing.T) {
 
 func TestLogin_Success(t *testing.T) {
 	mockRepo := new(MockRepository)
-	service := New(mockRepo, "test-secret")
+	service := New(mockRepo, "test-secret", "", "")
 	ctx := context.Background()
 
 	password := "password123"
@@ -232,7 +232,7 @@ func TestLogin_Success(t *testing.T) {
 
 func TestLogin_UserNotFound(t *testing.T) {
 	mockRepo := new(MockRepository)
-	service := New(mockRepo, "test-secret")
+	service := New(mockRepo, "test-secret", "", "")
 	ctx := context.Background()
 
 	mockRepo.On("GetUserByEmail", ctx, "notfound@example.com").Return(nil, nil)

@@ -41,6 +41,11 @@ func (m *MockUserService) ValidateToken(tokenString string) (int64, string, erro
 	return args.Get(0).(int64), args.String(1), args.Error(2)
 }
 
+func (m *MockUserService) ValidateTokenWithRole(tokenString string) (int64, string, string, error) {
+	args := m.Called(tokenString)
+	return args.Get(0).(int64), args.String(1), args.String(2), args.Error(3)
+}
+
 func (m *MockUserService) GenerateToken(user *model.User) (string, error) {
 	args := m.Called(user)
 	return args.String(0), args.Error(1)
@@ -261,7 +266,7 @@ func TestValidateToken_ValidToken(t *testing.T) {
 		Token: "valid-token",
 	}
 	
-	mockService.On("ValidateToken", "valid-token").Return(int64(1), "test@example.com", nil)
+	mockService.On("ValidateTokenWithRole", "valid-token").Return(int64(1), "test@example.com", "user", nil)
 	
 	resp, err := handler.ValidateToken(ctx, req)
 	
@@ -282,7 +287,7 @@ func TestValidateToken_InvalidToken(t *testing.T) {
 		Token: "invalid-token",
 	}
 	
-	mockService.On("ValidateToken", "invalid-token").Return(int64(0), "", errors.New("invalid token"))
+	mockService.On("ValidateTokenWithRole", "invalid-token").Return(int64(0), "", "", errors.New("invalid token"))
 	
 	resp, err := handler.ValidateToken(ctx, req)
 	
@@ -305,6 +310,5 @@ func TestValidateToken_EmptyToken(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotNil(t, resp)
 	assert.False(t, resp.Valid)
-	mockService.AssertNotCalled(t, "ValidateToken")
+	mockService.AssertNotCalled(t, "ValidateTokenWithRole")
 }
-

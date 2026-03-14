@@ -45,6 +45,19 @@ func (m *MockRepository) UpdateDeliveryStatus(ctx context.Context, id int64, sta
 	return args.Error(0)
 }
 
+func (m *MockRepository) ListDeliveries(ctx context.Context, limit, offset int32, status string) ([]*model.Delivery, error) {
+	args := m.Called(ctx, limit, offset, status)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*model.Delivery), args.Error(1)
+}
+
+func (m *MockRepository) GetTotalDeliveries(ctx context.Context, status string) (int32, error) {
+	args := m.Called(ctx, status)
+	return args.Get(0).(int32), args.Error(1)
+}
+
 func TestNew(t *testing.T) {
 	mockRepo := new(MockRepository)
 	service := New(mockRepo)
@@ -196,4 +209,3 @@ func TestUpdateDeliveryStatus_UpdateError(t *testing.T) {
 	assert.Nil(t, delivery)
 	mockRepo.AssertExpectations(t)
 }
-

@@ -3,184 +3,100 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"regexp"
 	"testing"
 	"time"
 
+	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/che1nov/tea-shop/users-service/internal/model"
-	_ "github.com/lib/pq"
+	"github.com/lib/pq"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-// setupTestDB создает тестовую БД и таблицы
-func setupTestDB(t *testing.T) *sql.DB {
-	connStr := "user=user password=password dbname=users_db host=localhost port=5432 sslmode=disable"
-	db, err := sql.Open("postgres", connStr)
+func setupRepo(t *testing.T) (*UserRepository, sqlmock.Sqlmock, func()) {
+	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
-	
-	// Используем существующую таблицу users
-	// Создаем её если не существует
-	createTable := `
-		CREATE TABLE IF NOT EXISTS users (
-			id SERIAL PRIMARY KEY,
-			email VARCHAR(255) UNIQUE NOT NULL,
-			name VARCHAR(255) NOT NULL,
-			password_hash VARCHAR(255) NOT NULL,
-			created_at TIMESTAMP NOT NULL,
-			updated_at TIMESTAMP NOT NULL
-		);
-	`
-	_, err = db.Exec(createTable)
+	return New(db), mock, func() { _ = db.Close() }
+}
+
+func TestCreateUserSuccess(t *testing.T) {
+	repo, mock, cleanup := setupRepo(t)
+	defer cleanup()
+
+	user := &model.User{Email: "test@example.com", Name: "Test", PasswordHash: "hash"}
+	mock.ExpectQuery(regexp.QuoteMeta("INSERT INTO users (email, name, password_hash, created_at, updated_at)")).
+		WithArgs(user.Email, user.Name, user.PasswordHash, sqlmock.AnyArg(), sqlmock.AnyArg()).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(int64(1)))
+
+	err := repo.CreateUser(context.Background(), user)
 	require.NoError(t, err)
-	
-	return db
+	assert.Equal(t, int64(1), user.ID)
+	require.NoError(t, mock.ExpectationsWereMet())
 }
 
-// cleanupTestDB очищает тестовые данные
-func cleanupTestDB(t *testing.T, db *sql.DB) {
-	_, err := db.Exec("TRUNCATE TABLE users RESTART IDENTITY CASCADE")
+func TestCreateUserDuplicateEmail(t *testing.T) {
+	repo, mock, cleanup := setupRepo(t)
+	defer cleanup()
+
+	user := &model.User{Email: "dup@example.com", Name: "Dup", PasswordHash: "hash"}
+	mock.ExpectQuery(regexp.QuoteMeta("INSERT INTO users (email, name, password_hash, created_at, updated_at)")).
+		WithArgs(user.Email, user.Name, user.PasswordHash, sqlmock.AnyArg(), sqlmock.AnyArg()).
+		WillReturnError(&pq.Error{Code: "23505"})
+
+	err := repo.CreateUser(context.Background(), user)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, ErrEmailAlreadyExists)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestGetUserByIDSuccess(t *testing.T) {
+	repo, mock, cleanup := setupRepo(t)
+	defer cleanup()
+
+	now := time.Now()
+	mock.ExpectQuery(regexp.QuoteMeta("SELECT id, email, name, password_hash, created_at, updated_at FROM users WHERE id = $1")).
+		WithArgs(int64(7)).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "email", "name", "password_hash", "created_at", "updated_at"}).
+			AddRow(int64(7), "u@example.com", "User", "hash", now, now))
+
+	user, err := repo.GetUserByID(context.Background(), 7)
 	require.NoError(t, err)
+	require.NotNil(t, user)
+	assert.Equal(t, model.RoleUser, user.Role)
+	assert.Equal(t, int64(7), user.ID)
+	require.NoError(t, mock.ExpectationsWereMet())
 }
 
-// setupTestDBWithCleanup создает БД и очищает её перед тестом
-func setupTestDBWithCleanup(t *testing.T) *sql.DB {
-	db := setupTestDB(t)
-	// Очищаем таблицу перед тестом
-	_, err := db.Exec("TRUNCATE TABLE users RESTART IDENTITY CASCADE")
+func TestGetUserByIDNotFound(t *testing.T) {
+	repo, mock, cleanup := setupRepo(t)
+	defer cleanup()
+
+	mock.ExpectQuery(regexp.QuoteMeta("SELECT id, email, name, password_hash, created_at, updated_at FROM users WHERE id = $1")).
+		WithArgs(int64(100)).
+		WillReturnError(sql.ErrNoRows)
+
+	user, err := repo.GetUserByID(context.Background(), 100)
 	require.NoError(t, err)
-	return db
-}
-
-func TestCreateUser_Success(t *testing.T) {
-	db := setupTestDBWithCleanup(t)
-	defer db.Close()
-	defer cleanupTestDB(t, db)
-	
-	repo := &UserRepository{db: db}
-	ctx := context.Background()
-	
-	user := &model.User{
-		Email:        "test@example.com",
-		Name:         "Test User",
-		PasswordHash: "hashed_password",
-	}
-	
-	err := repo.CreateUser(ctx, user)
-	
-	assert.NoError(t, err)
-	assert.Greater(t, user.ID, int64(0))
-	
-	// Проверяем, что пользователь создан
-	var count int
-	err = db.QueryRow("SELECT COUNT(*) FROM users WHERE id = $1", user.ID).Scan(&count)
-	assert.NoError(t, err)
-	assert.Equal(t, 1, count)
-}
-
-func TestCreateUser_DuplicateEmail(t *testing.T) {
-	db := setupTestDBWithCleanup(t)
-	defer db.Close()
-	defer cleanupTestDB(t, db)
-	
-	repo := &UserRepository{db: db}
-	ctx := context.Background()
-	
-	user1 := &model.User{
-		Email:        "duplicate@example.com",
-		Name:         "First User",
-		PasswordHash: "hash1",
-	}
-	
-	err := repo.CreateUser(ctx, user1)
-	assert.NoError(t, err)
-	
-	// Пытаемся создать пользователя с тем же email
-	user2 := &model.User{
-		Email:        "duplicate@example.com",
-		Name:         "Second User",
-		PasswordHash: "hash2",
-	}
-	
-	err = repo.CreateUser(ctx, user2)
-	assert.Error(t, err)
-	assert.Equal(t, ErrEmailAlreadyExists, err)
-}
-
-func TestGetUserByID_Success(t *testing.T) {
-	db := setupTestDBWithCleanup(t)
-	defer db.Close()
-	defer cleanupTestDB(t, db)
-	
-	repo := &UserRepository{db: db}
-	ctx := context.Background()
-	
-	// Создаем пользователя напрямую в БД для теста
-	var userID int64
-	err := db.QueryRow(`
-		INSERT INTO users (email, name, password_hash, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5)
-		RETURNING id
-	`, "test@example.com", "Test User", "hash", time.Now(), time.Now()).Scan(&userID)
-	require.NoError(t, err)
-	
-	// Получаем пользователя через репозиторий
-	user, err := repo.GetUserByID(ctx, userID)
-	
-	assert.NoError(t, err)
-	assert.NotNil(t, user)
-	assert.Equal(t, userID, user.ID)
-	assert.Equal(t, "test@example.com", user.Email)
-	assert.Equal(t, "Test User", user.Name)
-}
-
-func TestGetUserByID_NotFound(t *testing.T) {
-	db := setupTestDBWithCleanup(t)
-	defer db.Close()
-	defer cleanupTestDB(t, db)
-	
-	repo := &UserRepository{db: db}
-	ctx := context.Background()
-	
-	user, err := repo.GetUserByID(ctx, 99999)
-	
-	assert.NoError(t, err)
 	assert.Nil(t, user)
+	require.NoError(t, mock.ExpectationsWereMet())
 }
 
-func TestGetUserByEmail_Success(t *testing.T) {
-	db := setupTestDBWithCleanup(t)
-	defer db.Close()
-	defer cleanupTestDB(t, db)
-	
-	repo := &UserRepository{db: db}
-	ctx := context.Background()
-	
-	// Создаем пользователя
-	_, err := db.Exec(`
-		INSERT INTO users (email, name, password_hash, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5)
-	`, "email@example.com", "Email User", "hash", time.Now(), time.Now())
+func TestGetUserByEmailSuccess(t *testing.T) {
+	repo, mock, cleanup := setupRepo(t)
+	defer cleanup()
+
+	now := time.Now()
+	mock.ExpectQuery(regexp.QuoteMeta("SELECT id, email, name, password_hash, created_at, updated_at FROM users WHERE email = $1")).
+		WithArgs("mail@example.com").
+		WillReturnRows(sqlmock.NewRows([]string{"id", "email", "name", "password_hash", "created_at", "updated_at"}).
+			AddRow(int64(3), "mail@example.com", "Name", "hash", now, now))
+
+	user, err := repo.GetUserByEmail(context.Background(), "mail@example.com")
 	require.NoError(t, err)
-	
-	// Получаем пользователя по email
-	user, err := repo.GetUserByEmail(ctx, "email@example.com")
-	
-	assert.NoError(t, err)
-	assert.NotNil(t, user)
-	assert.Equal(t, "email@example.com", user.Email)
-}
-
-func TestGetUserByEmail_NotFound(t *testing.T) {
-	db := setupTestDBWithCleanup(t)
-	defer db.Close()
-	defer cleanupTestDB(t, db)
-	
-	repo := &UserRepository{db: db}
-	ctx := context.Background()
-	
-	user, err := repo.GetUserByEmail(ctx, "notfound@example.com")
-	
-	assert.NoError(t, err)
-	assert.Nil(t, user)
+	require.NotNil(t, user)
+	assert.Equal(t, model.RoleUser, user.Role)
+	assert.Equal(t, "mail@example.com", user.Email)
+	require.NoError(t, mock.ExpectationsWereMet())
 }
 

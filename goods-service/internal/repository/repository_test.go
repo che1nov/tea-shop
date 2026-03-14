@@ -3,159 +3,99 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"regexp"
 	"testing"
 	"time"
 
+	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/che1nov/tea-shop/goods-service/internal/model"
-	_ "github.com/lib/pq"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-// setupTestDBWithCleanup создает БД и очищает её перед тестом
-func setupTestDBWithCleanup(t *testing.T) *sql.DB {
-	connStr := "user=user password=password dbname=goods_db host=localhost port=5433 sslmode=disable"
-	db, err := sql.Open("postgres", connStr)
+func setupGoodsRepo(t *testing.T) (*GoodsRepository, sqlmock.Sqlmock, func()) {
+	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
-
-	createTable := `
-		CREATE TABLE IF NOT EXISTS goods (
-			id SERIAL PRIMARY KEY,
-			name VARCHAR(255) NOT NULL,
-			description TEXT,
-			price DECIMAL(10, 2) NOT NULL,
-			stock INT NOT NULL,
-			created_at TIMESTAMP NOT NULL,
-			updated_at TIMESTAMP NOT NULL
-		);
-		CREATE TABLE IF NOT EXISTS stock_reservations (
-			id SERIAL PRIMARY KEY,
-			good_id INT NOT NULL,
-			order_id INT NOT NULL,
-			quantity INT NOT NULL,
-			created_at TIMESTAMP NOT NULL
-		);
-	`
-	_, err = db.Exec(createTable)
-	require.NoError(t, err)
-
-	// Очищаем таблицы перед тестом
-	_, err = db.Exec("TRUNCATE TABLE goods, stock_reservations RESTART IDENTITY CASCADE")
-	require.NoError(t, err)
-
-	return db
+	return New(db), mock, func() { _ = db.Close() }
 }
 
-func cleanupTestDB(t *testing.T, db *sql.DB) {
-	_, err := db.Exec("TRUNCATE TABLE goods, stock_reservations RESTART IDENTITY CASCADE")
+func TestCreateGoodAutoSKU(t *testing.T) {
+	repo, mock, cleanup := setupGoodsRepo(t)
+	defer cleanup()
+
+	good := &model.Good{Name: "Tea", Description: "Green", Price: 100, Stock: 5}
+	mock.ExpectQuery(regexp.QuoteMeta("SELECT COALESCE(MAX(id), 0) FROM goods")).
+		WillReturnRows(sqlmock.NewRows([]string{"max"}).AddRow(int64(15)))
+	mock.ExpectQuery(regexp.QuoteMeta("INSERT INTO goods (sku, name, description, price, stock, created_at, updated_at)")).
+		WithArgs("GOOD-000016", good.Name, good.Description, good.Price, good.Stock, sqlmock.AnyArg(), sqlmock.AnyArg()).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(int64(16)))
+
+	err := repo.CreateGood(context.Background(), good)
 	require.NoError(t, err)
+	require.Equal(t, int64(16), good.ID)
+	require.Equal(t, "GOOD-000016", good.SKU)
+	require.NoError(t, mock.ExpectationsWereMet())
 }
 
-func TestCreateGood_Success(t *testing.T) {
-	db := setupTestDBWithCleanup(t)
-	defer db.Close()
-	defer cleanupTestDB(t, db)
+func TestGetGoodNotFound(t *testing.T) {
+	repo, mock, cleanup := setupGoodsRepo(t)
+	defer cleanup()
 
-	repo := &GoodsRepository{db: db}
-	ctx := context.Background()
+	mock.ExpectQuery(regexp.QuoteMeta("SELECT id, sku, name, description, price, stock, created_at, updated_at FROM goods WHERE id = $1")).
+		WithArgs(int64(1)).
+		WillReturnError(sql.ErrNoRows)
 
-	good := &model.Good{
-		Name:        "Test Good",
-		Description:  "Test Description",
-		Price:       99.99,
-		Stock:       100,
-	}
-
-	err := repo.CreateGood(ctx, good)
-
-	assert.NoError(t, err)
-	assert.Greater(t, good.ID, int64(0))
-}
-
-func TestGetGood_Success(t *testing.T) {
-	db := setupTestDBWithCleanup(t)
-	defer db.Close()
-	defer cleanupTestDB(t, db)
-
-	repo := &GoodsRepository{db: db}
-	ctx := context.Background()
-
-	// Создаем товар напрямую в БД
-	var goodID int64
-	err := db.QueryRow(`
-		INSERT INTO goods (name, description, price, stock, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6)
-		RETURNING id
-	`, "Test Good", "Description", 99.99, 100, time.Now(), time.Now()).Scan(&goodID)
+	good, err := repo.GetGood(context.Background(), 1)
 	require.NoError(t, err)
-
-	// Получаем товар через репозиторий
-	good, err := repo.GetGood(ctx, goodID)
-
-	assert.NoError(t, err)
-	assert.NotNil(t, good)
-	assert.Equal(t, goodID, good.ID)
-	assert.Equal(t, "Test Good", good.Name)
+	require.Nil(t, good)
+	require.NoError(t, mock.ExpectationsWereMet())
 }
 
-func TestGetGood_NotFound(t *testing.T) {
-	db := setupTestDBWithCleanup(t)
-	defer db.Close()
-	defer cleanupTestDB(t, db)
+func TestListGoodsSuccess(t *testing.T) {
+	repo, mock, cleanup := setupGoodsRepo(t)
+	defer cleanup()
 
-	repo := &GoodsRepository{db: db}
-	ctx := context.Background()
+	now := time.Now()
+	mock.ExpectQuery(regexp.QuoteMeta("SELECT id, sku, name, description, price, stock, created_at, updated_at FROM goods ORDER BY id LIMIT $1 OFFSET $2")).
+		WithArgs(int32(10), int32(0)).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "sku", "name", "description", "price", "stock", "created_at", "updated_at"}).
+			AddRow(int64(1), "GOOD-000001", "Tea", "Desc", 10.5, int32(3), now, now))
 
-	good, err := repo.GetGood(ctx, 99999)
-
-	assert.NoError(t, err)
-	assert.Nil(t, good)
-}
-
-func TestListGoods_Success(t *testing.T) {
-	db := setupTestDBWithCleanup(t)
-	defer db.Close()
-	defer cleanupTestDB(t, db)
-
-	repo := &GoodsRepository{db: db}
-	ctx := context.Background()
-
-	// Создаем несколько товаров
-	_, err := db.Exec(`
-		INSERT INTO goods (name, description, price, stock, created_at, updated_at)
-		VALUES 
-			('Good 1', 'Desc 1', 10.0, 50, NOW(), NOW()),
-			('Good 2', 'Desc 2', 20.0, 30, NOW(), NOW())
-	`)
+	goods, err := repo.ListGoods(context.Background(), 10, 0)
 	require.NoError(t, err)
-
-	goods, err := repo.ListGoods(ctx, 10, 0)
-
-	assert.NoError(t, err)
-	assert.NotNil(t, goods)
-	assert.GreaterOrEqual(t, len(goods), 2)
+	require.Len(t, goods, 1)
+	require.NoError(t, mock.ExpectationsWereMet())
 }
 
-func TestGetTotalGoods_Success(t *testing.T) {
-	db := setupTestDBWithCleanup(t)
-	defer db.Close()
-	defer cleanupTestDB(t, db)
+func TestReserveStockInsufficient(t *testing.T) {
+	repo, mock, cleanup := setupGoodsRepo(t)
+	defer cleanup()
 
-	repo := &GoodsRepository{db: db}
-	ctx := context.Background()
+	mock.ExpectBegin()
+	mock.ExpectQuery(regexp.QuoteMeta("SELECT stock FROM goods WHERE id = $1 FOR UPDATE")).
+		WithArgs(int64(10)).
+		WillReturnRows(sqlmock.NewRows([]string{"stock"}).AddRow(int32(1)))
+	mock.ExpectRollback()
 
-	// Создаем товары
-	_, err := db.Exec(`
-		INSERT INTO goods (name, description, price, stock, created_at, updated_at)
-		VALUES 
-			('Good 1', 'Desc 1', 10.0, 50, NOW(), NOW()),
-			('Good 2', 'Desc 2', 20.0, 30, NOW(), NOW())
-	`)
+	err := repo.ReserveStock(context.Background(), 10, 2, 100)
+	require.ErrorIs(t, err, sql.ErrNoRows)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestDeleteGoodSuccess(t *testing.T) {
+	repo, mock, cleanup := setupGoodsRepo(t)
+	defer cleanup()
+
+	mock.ExpectBegin()
+	mock.ExpectExec(regexp.QuoteMeta("DELETE FROM stock_reservations WHERE good_id = $1")).
+		WithArgs(int64(5)).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec(regexp.QuoteMeta("DELETE FROM goods WHERE id = $1")).
+		WithArgs(int64(5)).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectCommit()
+
+	err := repo.DeleteGood(context.Background(), 5)
 	require.NoError(t, err)
-
-	total, err := repo.GetTotalGoods(ctx)
-
-	assert.NoError(t, err)
-	assert.Equal(t, int32(2), total)
+	require.NoError(t, mock.ExpectationsWereMet())
 }
 

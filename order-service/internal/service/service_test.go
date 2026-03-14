@@ -80,6 +80,14 @@ func (m *MockGoodsServiceClient) GetGood(ctx context.Context, req *pb.GetGoodReq
 	return args.Get(0).(*pb.Good), args.Error(1)
 }
 
+func (m *MockGoodsServiceClient) CreateGood(ctx context.Context, req *pb.CreateGoodRequest, opts ...grpc.CallOption) (*pb.Good, error) {
+	args := m.Called(ctx, req)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*pb.Good), args.Error(1)
+}
+
 func (m *MockGoodsServiceClient) ListGoods(ctx context.Context, req *pb.ListGoodsRequest, opts ...grpc.CallOption) (*pb.ListGoodsResponse, error) {
 	args := m.Called(ctx, req)
 	if args.Get(0) == nil {
@@ -104,6 +112,22 @@ func (m *MockGoodsServiceClient) ReserveStock(ctx context.Context, req *pb.Reser
 	return args.Get(0).(*pb.ReserveStockResponse), args.Error(1)
 }
 
+func (m *MockGoodsServiceClient) UpdateGood(ctx context.Context, req *pb.UpdateGoodRequest, opts ...grpc.CallOption) (*pb.Good, error) {
+	args := m.Called(ctx, req)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*pb.Good), args.Error(1)
+}
+
+func (m *MockGoodsServiceClient) DeleteGood(ctx context.Context, req *pb.DeleteGoodRequest, opts ...grpc.CallOption) (*pb.DeleteGoodResponse, error) {
+	args := m.Called(ctx, req)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*pb.DeleteGoodResponse), args.Error(1)
+}
+
 // MockPaymentsServiceClient - мок для gRPC клиента payment service
 type MockPaymentsServiceClient struct {
 	mock.Mock
@@ -125,13 +149,58 @@ func (m *MockPaymentsServiceClient) GetPayment(ctx context.Context, req *pb.GetP
 	return args.Get(0).(*pb.Payment), args.Error(1)
 }
 
+func (m *MockPaymentsServiceClient) GetPaymentByOrderID(ctx context.Context, req *pb.GetPaymentByOrderIDRequest, opts ...grpc.CallOption) (*pb.Payment, error) {
+	args := m.Called(ctx, req)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*pb.Payment), args.Error(1)
+}
+
+type MockDeliveryServiceClient struct {
+	mock.Mock
+}
+
+func (m *MockDeliveryServiceClient) CreateDelivery(ctx context.Context, req *pb.CreateDeliveryRequest, opts ...grpc.CallOption) (*pb.Delivery, error) {
+	args := m.Called(ctx, req)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*pb.Delivery), args.Error(1)
+}
+
+func (m *MockDeliveryServiceClient) GetDelivery(ctx context.Context, req *pb.GetDeliveryRequest, opts ...grpc.CallOption) (*pb.Delivery, error) {
+	args := m.Called(ctx, req)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*pb.Delivery), args.Error(1)
+}
+
+func (m *MockDeliveryServiceClient) UpdateDeliveryStatus(ctx context.Context, req *pb.UpdateDeliveryStatusRequest, opts ...grpc.CallOption) (*pb.Delivery, error) {
+	args := m.Called(ctx, req)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*pb.Delivery), args.Error(1)
+}
+
+func (m *MockDeliveryServiceClient) ListDeliveries(ctx context.Context, req *pb.ListDeliveriesRequest, opts ...grpc.CallOption) (*pb.ListDeliveriesResponse, error) {
+	args := m.Called(ctx, req)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*pb.ListDeliveriesResponse), args.Error(1)
+}
+
 func TestNew(t *testing.T) {
 	mockRepo := new(MockRepository)
 	mockProducer := new(MockProducer)
 	mockGoodsClient := new(MockGoodsServiceClient)
 	mockPaymentClient := new(MockPaymentsServiceClient)
+	mockDeliveryClient := new(MockDeliveryServiceClient)
 
-	service := New(mockRepo, mockProducer, mockGoodsClient, mockPaymentClient)
+	service := New(mockRepo, mockProducer, mockGoodsClient, mockPaymentClient, mockDeliveryClient)
 
 	assert.NotNil(t, service)
 	assert.Equal(t, mockRepo, service.repo)
@@ -140,7 +209,7 @@ func TestNew(t *testing.T) {
 
 func TestGetOrder_Success(t *testing.T) {
 	mockRepo := new(MockRepository)
-	service := New(mockRepo, new(MockProducer), new(MockGoodsServiceClient), new(MockPaymentsServiceClient))
+	service := New(mockRepo, new(MockProducer), new(MockGoodsServiceClient), new(MockPaymentsServiceClient), new(MockDeliveryServiceClient))
 	ctx := context.Background()
 
 	expectedOrder := &model.Order{
@@ -162,7 +231,7 @@ func TestGetOrder_Success(t *testing.T) {
 
 func TestUpdateOrderStatus_Success(t *testing.T) {
 	mockRepo := new(MockRepository)
-	service := New(mockRepo, new(MockProducer), new(MockGoodsServiceClient), new(MockPaymentsServiceClient))
+	service := New(mockRepo, new(MockProducer), new(MockGoodsServiceClient), new(MockPaymentsServiceClient), new(MockDeliveryServiceClient))
 	ctx := context.Background()
 
 	expectedOrder := &model.Order{
@@ -185,7 +254,7 @@ func TestUpdateOrderStatus_Success(t *testing.T) {
 
 func TestListUserOrders_Success(t *testing.T) {
 	mockRepo := new(MockRepository)
-	service := New(mockRepo, new(MockProducer), new(MockGoodsServiceClient), new(MockPaymentsServiceClient))
+	service := New(mockRepo, new(MockProducer), new(MockGoodsServiceClient), new(MockPaymentsServiceClient), new(MockDeliveryServiceClient))
 	ctx := context.Background()
 
 	expectedOrders := []*model.Order{
@@ -205,4 +274,3 @@ func TestListUserOrders_Success(t *testing.T) {
 
 // Note: CreateOrder тест более сложный, так как требует множества моков
 // Для полного тестирования нужны моки для goods и payment клиентов
-

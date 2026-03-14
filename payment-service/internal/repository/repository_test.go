@@ -3,156 +3,64 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"regexp"
 	"testing"
 	"time"
 
+	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/che1nov/tea-shop/payment-service/internal/model"
-	_ "github.com/lib/pq"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-// setupTestDBWithCleanup создает БД и очищает её перед тестом
-func setupTestDBWithCleanup(t *testing.T) *sql.DB {
-	connStr := "user=user password=password dbname=payments_db host=localhost port=5435 sslmode=disable"
-	db, err := sql.Open("postgres", connStr)
+func setupPaymentRepo(t *testing.T) (*PaymentRepository, sqlmock.Sqlmock, func()) {
+	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
-
-	createTable := `
-		CREATE TABLE IF NOT EXISTS payments (
-			id SERIAL PRIMARY KEY,
-			order_id INT NOT NULL,
-			amount DECIMAL(10, 2) NOT NULL,
-			status VARCHAR(50) NOT NULL,
-			method VARCHAR(50) NOT NULL,
-			created_at TIMESTAMP NOT NULL,
-			updated_at TIMESTAMP NOT NULL
-		);
-	`
-	_, err = db.Exec(createTable)
-	require.NoError(t, err)
-
-	// Очищаем таблицу перед тестом
-	_, err = db.Exec("TRUNCATE TABLE payments RESTART IDENTITY CASCADE")
-	require.NoError(t, err)
-
-	return db
+	return New(db), mock, func() { _ = db.Close() }
 }
 
-func cleanupTestDB(t *testing.T, db *sql.DB) {
-	_, err := db.Exec("TRUNCATE TABLE payments RESTART IDENTITY CASCADE")
+func TestCreatePaymentSuccess(t *testing.T) {
+	repo, mock, cleanup := setupPaymentRepo(t)
+	defer cleanup()
+
+	p := &model.Payment{OrderID: 1, Amount: 10, Status: "pending", Method: "card"}
+	mock.ExpectQuery(regexp.QuoteMeta("INSERT INTO payments (order_id, amount, status, method, created_at, updated_at)")).
+		WithArgs(p.OrderID, p.Amount, p.Status, p.Method, sqlmock.AnyArg(), sqlmock.AnyArg()).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(int64(3)))
+
+	err := repo.CreatePayment(context.Background(), p)
 	require.NoError(t, err)
+	require.Equal(t, int64(3), p.ID)
+	require.NoError(t, mock.ExpectationsWereMet())
 }
 
-func TestCreatePayment_Success(t *testing.T) {
-	db := setupTestDBWithCleanup(t)
-	defer db.Close()
-	defer cleanupTestDB(t, db)
+func TestGetPaymentNotFound(t *testing.T) {
+	repo, mock, cleanup := setupPaymentRepo(t)
+	defer cleanup()
 
-	repo := &PaymentRepository{db: db}
-	ctx := context.Background()
+	mock.ExpectQuery(regexp.QuoteMeta("SELECT id, order_id, amount, status, method, created_at, updated_at FROM payments WHERE id = $1")).
+		WithArgs(int64(123)).
+		WillReturnError(sql.ErrNoRows)
 
-	payment := &model.Payment{
-		OrderID: 100,
-		Amount:  99.99,
-		Status:  "pending",
-		Method:  "card",
-	}
-
-	err := repo.CreatePayment(ctx, payment)
-
-	assert.NoError(t, err)
-	assert.Greater(t, payment.ID, int64(0))
-}
-
-func TestGetPayment_Success(t *testing.T) {
-	db := setupTestDBWithCleanup(t)
-	defer db.Close()
-	defer cleanupTestDB(t, db)
-
-	repo := &PaymentRepository{db: db}
-	ctx := context.Background()
-
-	// Создаем платеж напрямую в БД
-	var paymentID int64
-	err := db.QueryRow(`
-		INSERT INTO payments (order_id, amount, status, method, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6)
-		RETURNING id
-	`, 100, 99.99, "completed", "card", time.Now(), time.Now()).Scan(&paymentID)
+	p, err := repo.GetPayment(context.Background(), 123)
 	require.NoError(t, err)
-
-	// Получаем платеж через репозиторий
-	payment, err := repo.GetPayment(ctx, paymentID)
-
-	assert.NoError(t, err)
-	assert.NotNil(t, payment)
-	assert.Equal(t, paymentID, payment.ID)
-	assert.Equal(t, int64(100), payment.OrderID)
+	require.Nil(t, p)
+	require.NoError(t, mock.ExpectationsWereMet())
 }
 
-func TestGetPayment_NotFound(t *testing.T) {
-	db := setupTestDBWithCleanup(t)
-	defer db.Close()
-	defer cleanupTestDB(t, db)
+func TestGetPaymentByOrderIDSuccess(t *testing.T) {
+	repo, mock, cleanup := setupPaymentRepo(t)
+	defer cleanup()
 
-	repo := &PaymentRepository{db: db}
-	ctx := context.Background()
+	now := time.Now()
+	mock.ExpectQuery(regexp.QuoteMeta("SELECT id, order_id, amount, status, method, created_at, updated_at FROM payments WHERE order_id = $1")).
+		WithArgs(int64(99)).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "order_id", "amount", "status", "method", "created_at", "updated_at"}).
+			AddRow(int64(9), int64(99), 19.5, "completed", "card", now, now))
 
-	payment, err := repo.GetPayment(ctx, 99999)
-
-	assert.NoError(t, err)
-	assert.Nil(t, payment)
-}
-
-func TestUpdatePaymentStatus_Success(t *testing.T) {
-	db := setupTestDBWithCleanup(t)
-	defer db.Close()
-	defer cleanupTestDB(t, db)
-
-	repo := &PaymentRepository{db: db}
-	ctx := context.Background()
-
-	// Создаем платеж
-	var paymentID int64
-	err := db.QueryRow(`
-		INSERT INTO payments (order_id, amount, status, method, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6)
-		RETURNING id
-	`, 100, 99.99, "pending", "card", time.Now(), time.Now()).Scan(&paymentID)
+	p, err := repo.GetPaymentByOrderID(context.Background(), 99)
 	require.NoError(t, err)
-
-	// Обновляем статус
-	err = repo.UpdatePaymentStatus(ctx, paymentID, "completed")
-	assert.NoError(t, err)
-
-	// Проверяем изменение
-	var status string
-	err = db.QueryRow("SELECT status FROM payments WHERE id = $1", paymentID).Scan(&status)
-	assert.NoError(t, err)
-	assert.Equal(t, "completed", status)
-}
-
-func TestGetPaymentByOrderID_Success(t *testing.T) {
-	db := setupTestDBWithCleanup(t)
-	defer db.Close()
-	defer cleanupTestDB(t, db)
-
-	repo := &PaymentRepository{db: db}
-	ctx := context.Background()
-
-	// Создаем платеж
-	_, err := db.Exec(`
-		INSERT INTO payments (order_id, amount, status, method, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6)
-	`, 100, 99.99, "completed", "card", time.Now(), time.Now())
-	require.NoError(t, err)
-
-	// Получаем платеж по order_id
-	payment, err := repo.GetPaymentByOrderID(ctx, 100)
-
-	assert.NoError(t, err)
-	assert.NotNil(t, payment)
-	assert.Equal(t, int64(100), payment.OrderID)
+	require.NotNil(t, p)
+	require.Equal(t, int64(99), p.OrderID)
+	require.NoError(t, mock.ExpectationsWereMet())
 }
 

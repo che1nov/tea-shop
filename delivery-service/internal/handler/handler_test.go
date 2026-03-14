@@ -50,6 +50,14 @@ func (m *MockDeliveryService) UpdateDeliveryStatus(ctx context.Context, id int64
 	return args.Get(0).(*model.Delivery), args.Error(1)
 }
 
+func (m *MockDeliveryService) ListDeliveries(ctx context.Context, limit, offset int32, status string) ([]*model.Delivery, int32, error) {
+	args := m.Called(ctx, limit, offset, status)
+	if args.Get(0) == nil {
+		return nil, 0, args.Error(2)
+	}
+	return args.Get(0).([]*model.Delivery), args.Get(1).(int32), args.Error(2)
+}
+
 func TestCreateDelivery_Success(t *testing.T) {
 	mockService := new(MockDeliveryService)
 	handler := New(mockService)
@@ -284,4 +292,3 @@ func TestUpdateDeliveryStatus_NotFound(t *testing.T) {
 	assert.Equal(t, codes.NotFound, st.Code())
 	mockService.AssertExpectations(t)
 }
-

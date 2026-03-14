@@ -45,6 +45,16 @@ func (m *MockRepository) ReserveStock(ctx context.Context, goodID int64, quantit
 	return args.Error(0)
 }
 
+func (m *MockRepository) UpdateGood(ctx context.Context, good *model.Good) error {
+	args := m.Called(ctx, good)
+	return args.Error(0)
+}
+
+func (m *MockRepository) DeleteGood(ctx context.Context, id int64) error {
+	args := m.Called(ctx, id)
+	return args.Error(0)
+}
+
 func (m *MockRepository) GetTotalGoods(ctx context.Context) (int32, error) {
 	args := m.Called(ctx)
 	return args.Get(0).(int32), args.Error(1)
@@ -236,4 +246,3 @@ func TestReserveStock_Error(t *testing.T) {
 	assert.False(t, success)
 	mockRepo.AssertExpectations(t)
 }
-

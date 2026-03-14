@@ -56,6 +56,19 @@ func (m *MockGoodsService) ReserveStock(ctx context.Context, goodID int64, quant
 	return args.Bool(0), args.Error(1)
 }
 
+func (m *MockGoodsService) UpdateGood(ctx context.Context, id int64, req *model.UpdateGoodRequest) (*model.Good, error) {
+	args := m.Called(ctx, id, req)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*model.Good), args.Error(1)
+}
+
+func (m *MockGoodsService) DeleteGood(ctx context.Context, id int64) error {
+	args := m.Called(ctx, id)
+	return args.Error(0)
+}
+
 func TestNew(t *testing.T) {
 	mockService := new(MockGoodsService)
 	handler := New(mockService)
@@ -242,4 +255,3 @@ func TestReserveStock_Error(t *testing.T) {
 	assert.Equal(t, "database error", resp.Error)
 	mockService.AssertExpectations(t)
 }
-
