@@ -62,4 +62,3 @@ func TestListDeliveriesWithFilter(t *testing.T) {
 	require.Len(t, list, 1)
 	require.NoError(t, mock.ExpectationsWereMet())
 }
-

@@ -19,7 +19,7 @@ import (
 
 	pb "github.com/che1nov/tea-shop/shared/pb"
 	"github.com/che1nov/tea-shop/shared/pkg/logger"
-	
+
 	"github.com/che1nov/tea-shop/payment-service/config"
 	"github.com/che1nov/tea-shop/payment-service/internal/handler"
 	"github.com/che1nov/tea-shop/payment-service/internal/repository"
@@ -27,12 +27,10 @@ import (
 )
 
 func main() {
-	// Инициализируем logger
 	logger.Init()
 
 	cfg := config.Load()
 
-	// Подключение к БД
 	dbConnStr := fmt.Sprintf(
 		"user=%s password=%s dbname=%s host=%s port=%s sslmode=disable",
 		cfg.Database.User,
@@ -48,14 +46,12 @@ func main() {
 		panic(err)
 	}
 
-	// Проверяем подключение к БД
 	if err := db.Ping(); err != nil {
 		logger.Error("Failed to connect to database", "error", err)
 		panic(fmt.Sprintf("failed to connect to database: %v", err))
 	}
 	logger.Info("Database connection established")
 
-	// Создаём таблицы
 	createTablesSQL := `
 		CREATE TABLE IF NOT EXISTS payments (
 			id SERIAL PRIMARY KEY,
@@ -73,12 +69,10 @@ func main() {
 		panic(err)
 	}
 
-	// Инициализируем слои
 	repo := repository.New(db)
 	svc := service.New(repo)
 	hdlr := handler.New(svc)
 
-	// Запускаем HTTP сервер для метрик Prometheus ПЕРВЫМ
 	metricsPort := 9004
 	metricsMux := http.NewServeMux()
 	metricsMux.Handle("/metrics", promhttp.Handler())
@@ -87,11 +81,9 @@ func main() {
 		Handler: metricsMux,
 	}
 
-	// Канал для получения сигналов ОС
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
 
-	// Запускаем HTTP сервер для метрик в отдельной горутине (ПЕРВЫМ)
 	go func() {
 		logger.Info("Payment Service metrics server starting", "port", metricsPort)
 		if err := metricsServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
@@ -99,10 +91,8 @@ func main() {
 		}
 	}()
 
-	// Небольшая задержка для запуска HTTP сервера метрик
 	time.Sleep(100 * time.Millisecond)
 
-	// Запускаем gRPC сервер
 	listener, err := net.Listen("tcp", fmt.Sprintf(":%d", cfg.Server.Port))
 	if err != nil {
 		logger.Error("Failed to create gRPC listener", "error", err, "port", cfg.Server.Port)
@@ -122,15 +112,12 @@ func main() {
 	grpcServer := grpc.NewServer()
 	pb.RegisterPaymentsServiceServer(grpcServer, hdlr)
 
-	// Health check
 	healthServer := health.NewServer()
 	grpc_health_v1.RegisterHealthServer(grpcServer, healthServer)
 	healthServer.SetServingStatus("pb.PaymentsService", grpc_health_v1.HealthCheckResponse_SERVING)
 
-	// Enable gRPC reflection for easier testing
 	reflection.Register(grpcServer)
 
-	// Запускаем gRPC сервер в отдельной горутине
 	go func() {
 		logger.Info("Payment Service gRPC server started", "port", cfg.Server.Port)
 		if err := grpcServer.Serve(listener); err != nil {
@@ -138,19 +125,15 @@ func main() {
 		}
 	}()
 
-	// Ожидаем сигнал для graceful shutdown
 	<-sigChan
 	logger.Info("Shutting down Payment Service...")
 
-	// Graceful shutdown HTTP сервера метрик
 	if err := metricsServer.Close(); err != nil {
 		logger.Error("Error closing metrics server", "error", err)
 	}
 
-	// Graceful shutdown gRPC сервера
 	grpcServer.GracefulStop()
 
-	// Закрываем соединение с БД
 	if err := db.Close(); err != nil {
 		logger.Error("Error closing database", "error", err)
 	}

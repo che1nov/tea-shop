@@ -48,12 +48,10 @@ func AuthMiddleware(jwtSecret string) gin.HandlerFunc {
 
 		c.Set("user_id", int64(claims["user_id"].(float64)))
 		c.Set("email", claims["email"].(string))
-		
-		// Добавляем роль в контекст (если есть в токене)
+
 		if role, ok := claims["role"].(string); ok {
 			c.Set("role", role)
 		} else {
-			// Если роль не указана, устанавливаем "user" по умолчанию
 			c.Set("role", "user")
 		}
 

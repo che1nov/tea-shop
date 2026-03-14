@@ -6,11 +6,10 @@ import (
 	"time"
 
 	_ "github.com/lib/pq"
-	
+
 	"github.com/che1nov/tea-shop/delivery-service/internal/model"
 )
 
-// DeliveryRepositoryInterface определяет методы репозитория
 type DeliveryRepositoryInterface interface {
 	CreateDelivery(ctx context.Context, delivery *model.Delivery) error
 	GetDelivery(ctx context.Context, id int64) (*model.Delivery, error)

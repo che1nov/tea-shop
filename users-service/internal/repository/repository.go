@@ -6,13 +6,12 @@ import (
 	"errors"
 	"time"
 
-	"github.com/lib/pq"
 	"github.com/che1nov/tea-shop/users-service/internal/model"
+	"github.com/lib/pq"
 )
 
 var ErrEmailAlreadyExists = errors.New("email already exists")
 
-// UserRepositoryInterface определяет методы репозитория
 type UserRepositoryInterface interface {
 	CreateUser(ctx context.Context, user *model.User) error
 	GetUserByID(ctx context.Context, id int64) (*model.User, error)
@@ -43,9 +42,8 @@ func (r *UserRepository) CreateUser(ctx context.Context, user *model.User) error
 		now,
 		now,
 	).Scan(&user.ID)
-	
+
 	if err != nil {
-		// Проверяем ошибку уникального ограничения
 		if pqErr, ok := err.(*pq.Error); ok {
 			if pqErr.Code == "23505" { // unique_violation
 				return ErrEmailAlreadyExists
@@ -53,7 +51,7 @@ func (r *UserRepository) CreateUser(ctx context.Context, user *model.User) error
 		}
 		return err
 	}
-	
+
 	return nil
 }
 
@@ -77,7 +75,6 @@ func (r *UserRepository) GetUserByID(ctx context.Context, id int64) (*model.User
 		return nil, err
 	}
 
-	// Все пользователи из БД имеют роль "user"
 	user.Role = model.RoleUser
 	return user, nil
 }
@@ -102,7 +99,6 @@ func (r *UserRepository) GetUserByEmail(ctx context.Context, email string) (*mod
 		return nil, err
 	}
 
-	// Все пользователи из БД имеют роль "user"
 	user.Role = model.RoleUser
 	return user, nil
 }

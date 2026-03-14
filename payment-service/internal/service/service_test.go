@@ -10,7 +10,6 @@ import (
 	"github.com/stretchr/testify/mock"
 )
 
-// MockRepository - мок для репозитория
 type MockRepository struct {
 	mock.Mock
 }
@@ -161,4 +160,3 @@ func TestGetPaymentByOrderID_Success(t *testing.T) {
 	assert.Equal(t, expectedPayment, payment)
 	mockRepo.AssertExpectations(t)
 }
-

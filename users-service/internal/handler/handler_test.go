@@ -15,7 +15,6 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// MockUserService - мок для сервиса
 type MockUserService struct {
 	mock.Mock
 }
@@ -58,9 +57,9 @@ func (m *MockUserService) Login(ctx context.Context, email, password string) (st
 
 func TestNew(t *testing.T) {
 	mockService := new(MockUserService)
-	
+
 	handler := New(mockService)
-	
+
 	assert.NotNil(t, handler)
 	assert.Equal(t, mockService, handler.service)
 }
@@ -69,28 +68,28 @@ func TestCreateUser_Success(t *testing.T) {
 	mockService := new(MockUserService)
 	handler := New(mockService)
 	ctx := context.Background()
-	
+
 	req := &pb.CreateUserRequest{
 		Email:    "test@example.com",
 		Name:     "Test User",
 		Password: "password123",
 	}
-	
+
 	expectedUser := &model.User{
 		ID:           1,
 		Email:        "test@example.com",
 		Name:         "Test User",
 		PasswordHash: "hashed_password",
 	}
-	
+
 	mockService.On("CreateUser", ctx, &model.CreateUserRequest{
 		Email:    "test@example.com",
 		Name:     "Test User",
 		Password: "password123",
 	}).Return(expectedUser, nil)
-	
+
 	resp, err := handler.CreateUser(ctx, req)
-	
+
 	assert.NoError(t, err)
 	assert.NotNil(t, resp)
 	assert.Equal(t, int64(1), resp.Id)
@@ -103,17 +102,17 @@ func TestCreateUser_MissingEmail(t *testing.T) {
 	mockService := new(MockUserService)
 	handler := New(mockService)
 	ctx := context.Background()
-	
+
 	req := &pb.CreateUserRequest{
 		Name:     "Test User",
 		Password: "password123",
 	}
-	
+
 	resp, err := handler.CreateUser(ctx, req)
-	
+
 	assert.Error(t, err)
 	assert.Nil(t, resp)
-	
+
 	st, ok := status.FromError(err)
 	assert.True(t, ok)
 	assert.Equal(t, codes.InvalidArgument, st.Code())
@@ -125,17 +124,17 @@ func TestCreateUser_MissingName(t *testing.T) {
 	mockService := new(MockUserService)
 	handler := New(mockService)
 	ctx := context.Background()
-	
+
 	req := &pb.CreateUserRequest{
 		Email:    "test@example.com",
 		Password: "password123",
 	}
-	
+
 	resp, err := handler.CreateUser(ctx, req)
-	
+
 	assert.Error(t, err)
 	assert.Nil(t, resp)
-	
+
 	st, ok := status.FromError(err)
 	assert.True(t, ok)
 	assert.Equal(t, codes.InvalidArgument, st.Code())
@@ -146,17 +145,17 @@ func TestCreateUser_MissingPassword(t *testing.T) {
 	mockService := new(MockUserService)
 	handler := New(mockService)
 	ctx := context.Background()
-	
+
 	req := &pb.CreateUserRequest{
 		Email: "test@example.com",
 		Name:  "Test User",
 	}
-	
+
 	resp, err := handler.CreateUser(ctx, req)
-	
+
 	assert.Error(t, err)
 	assert.Nil(t, resp)
-	
+
 	st, ok := status.FromError(err)
 	assert.True(t, ok)
 	assert.Equal(t, codes.InvalidArgument, st.Code())
@@ -167,21 +166,21 @@ func TestCreateUser_EmailAlreadyExists(t *testing.T) {
 	mockService := new(MockUserService)
 	handler := New(mockService)
 	ctx := context.Background()
-	
+
 	req := &pb.CreateUserRequest{
 		Email:    "test@example.com",
 		Name:     "Test User",
 		Password: "password123",
 	}
-	
+
 	mockService.On("CreateUser", ctx, mock.AnythingOfType("*model.CreateUserRequest")).
 		Return(nil, service.ErrEmailAlreadyExists)
-	
+
 	resp, err := handler.CreateUser(ctx, req)
-	
+
 	assert.Error(t, err)
 	assert.Nil(t, resp)
-	
+
 	st, ok := status.FromError(err)
 	assert.True(t, ok)
 	assert.Equal(t, codes.AlreadyExists, st.Code())
@@ -192,22 +191,22 @@ func TestGetUser_Success(t *testing.T) {
 	mockService := new(MockUserService)
 	handler := New(mockService)
 	ctx := context.Background()
-	
+
 	req := &pb.GetUserRequest{
 		UserId: 1,
 	}
-	
+
 	expectedUser := &model.User{
 		ID:           1,
 		Email:        "test@example.com",
 		Name:         "Test User",
 		PasswordHash: "hashed_password",
 	}
-	
+
 	mockService.On("GetUser", ctx, int64(1)).Return(expectedUser, nil)
-	
+
 	resp, err := handler.GetUser(ctx, req)
-	
+
 	assert.NoError(t, err)
 	assert.NotNil(t, resp)
 	assert.Equal(t, int64(1), resp.Id)
@@ -219,16 +218,16 @@ func TestGetUser_InvalidUserId(t *testing.T) {
 	mockService := new(MockUserService)
 	handler := New(mockService)
 	ctx := context.Background()
-	
+
 	req := &pb.GetUserRequest{
 		UserId: 0,
 	}
-	
+
 	resp, err := handler.GetUser(ctx, req)
-	
+
 	assert.Error(t, err)
 	assert.Nil(t, resp)
-	
+
 	st, ok := status.FromError(err)
 	assert.True(t, ok)
 	assert.Equal(t, codes.InvalidArgument, st.Code())
@@ -239,18 +238,18 @@ func TestGetUser_NotFound(t *testing.T) {
 	mockService := new(MockUserService)
 	handler := New(mockService)
 	ctx := context.Background()
-	
+
 	req := &pb.GetUserRequest{
 		UserId: 999,
 	}
-	
+
 	mockService.On("GetUser", ctx, int64(999)).Return(nil, nil)
-	
+
 	resp, err := handler.GetUser(ctx, req)
-	
+
 	assert.Error(t, err)
 	assert.Nil(t, resp)
-	
+
 	st, ok := status.FromError(err)
 	assert.True(t, ok)
 	assert.Equal(t, codes.NotFound, st.Code())
@@ -261,15 +260,15 @@ func TestValidateToken_ValidToken(t *testing.T) {
 	mockService := new(MockUserService)
 	handler := New(mockService)
 	ctx := context.Background()
-	
+
 	req := &pb.ValidateTokenRequest{
 		Token: "valid-token",
 	}
-	
+
 	mockService.On("ValidateTokenWithRole", "valid-token").Return(int64(1), "test@example.com", "user", nil)
-	
+
 	resp, err := handler.ValidateToken(ctx, req)
-	
+
 	assert.NoError(t, err)
 	assert.NotNil(t, resp)
 	assert.True(t, resp.Valid)
@@ -282,15 +281,15 @@ func TestValidateToken_InvalidToken(t *testing.T) {
 	mockService := new(MockUserService)
 	handler := New(mockService)
 	ctx := context.Background()
-	
+
 	req := &pb.ValidateTokenRequest{
 		Token: "invalid-token",
 	}
-	
+
 	mockService.On("ValidateTokenWithRole", "invalid-token").Return(int64(0), "", "", errors.New("invalid token"))
-	
+
 	resp, err := handler.ValidateToken(ctx, req)
-	
+
 	assert.NoError(t, err) // Handler не возвращает ошибку, а возвращает Valid: false
 	assert.NotNil(t, resp)
 	assert.False(t, resp.Valid)
@@ -300,13 +299,13 @@ func TestValidateToken_EmptyToken(t *testing.T) {
 	mockService := new(MockUserService)
 	handler := New(mockService)
 	ctx := context.Background()
-	
+
 	req := &pb.ValidateTokenRequest{
 		Token: "",
 	}
-	
+
 	resp, err := handler.ValidateToken(ctx, req)
-	
+
 	assert.NoError(t, err)
 	assert.NotNil(t, resp)
 	assert.False(t, resp.Valid)

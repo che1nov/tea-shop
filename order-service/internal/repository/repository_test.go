@@ -71,4 +71,3 @@ func TestListUserOrdersSuccess(t *testing.T) {
 	require.Len(t, orders[0].Items, 1)
 	require.NoError(t, mock.ExpectationsWereMet())
 }
-

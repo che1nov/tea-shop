@@ -98,4 +98,3 @@ func TestDeleteGoodSuccess(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, mock.ExpectationsWereMet())
 }
-

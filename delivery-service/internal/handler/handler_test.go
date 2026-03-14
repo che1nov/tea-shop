@@ -6,14 +6,13 @@ import (
 	"time"
 
 	"github.com/che1nov/tea-shop/delivery-service/internal/model"
+	pb "github.com/che1nov/tea-shop/shared/pb"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
-	pb "github.com/che1nov/tea-shop/shared/pb"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
 
-// MockDeliveryService - мок для сервиса
 type MockDeliveryService struct {
 	mock.Mock
 }

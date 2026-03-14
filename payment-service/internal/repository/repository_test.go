@@ -63,4 +63,3 @@ func TestGetPaymentByOrderIDSuccess(t *testing.T) {
 	require.Equal(t, int64(99), p.OrderID)
 	require.NoError(t, mock.ExpectationsWereMet())
 }
-

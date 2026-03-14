@@ -99,4 +99,3 @@ func TestGetUserByEmailSuccess(t *testing.T) {
 	assert.Equal(t, "mail@example.com", user.Email)
 	require.NoError(t, mock.ExpectationsWereMet())
 }
-

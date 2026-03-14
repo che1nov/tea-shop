@@ -11,7 +11,6 @@ const RoleAdmin = "admin"
 // AdminMiddleware проверяет, что пользователь имеет роль администратора
 func AdminMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// Получаем роль из контекста (устанавливается в AuthMiddleware)
 		role, exists := c.Get("role")
 		if !exists {
 			c.JSON(http.StatusForbidden, gin.H{"error": "role not found in token"})
@@ -35,4 +34,3 @@ func AdminMiddleware() gin.HandlerFunc {
 		c.Next()
 	}
 }
-

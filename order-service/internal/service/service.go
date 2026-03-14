@@ -10,14 +10,12 @@ import (
 	"github.com/che1nov/tea-shop/order-service/internal/repository"
 )
 
-// KafkaProducerInterface определяет методы для Kafka producer
 type KafkaProducerInterface interface {
 	PublishOrderCreated(ctx context.Context, event *kafka.OrderEvent) error
 	PublishOrderCompleted(ctx context.Context, event *kafka.OrderEvent) error
 	Close() error
 }
 
-// OrderServiceInterface определяет методы сервиса
 type OrderServiceInterface interface {
 	CreateOrder(ctx context.Context, req *model.CreateOrderRequest) (*model.Order, error)
 	GetOrder(ctx context.Context, id int64) (*model.Order, error)
@@ -26,10 +24,10 @@ type OrderServiceInterface interface {
 }
 
 type OrderService struct {
-	repo               repository.OrderRepositoryInterface
-	producer           KafkaProducerInterface
-	goodsServiceConn   pb.GoodsServiceClient
-	paymentServiceConn pb.PaymentsServiceClient
+	repo                repository.OrderRepositoryInterface
+	producer            KafkaProducerInterface
+	goodsServiceConn    pb.GoodsServiceClient
+	paymentServiceConn  pb.PaymentsServiceClient
 	deliveryServiceConn pb.DeliveryServiceClient
 }
 
@@ -50,10 +48,8 @@ func New(
 }
 
 func (s *OrderService) CreateOrder(ctx context.Context, req *model.CreateOrderRequest) (*model.Order, error) {
-	// Расчет общей суммы
 	var totalPrice float64
 
-	// Проверяем наличие всех товаров
 	for _, item := range req.Items {
 		good, err := s.goodsServiceConn.GetGood(ctx, &pb.GetGoodRequest{GoodId: item.GoodID})
 		if err != nil {
@@ -67,7 +63,6 @@ func (s *OrderService) CreateOrder(ctx context.Context, req *model.CreateOrderRe
 		item.Price = good.Price
 		totalPrice += good.Price * float64(item.Quantity)
 
-		// Проверяем наличие товара
 		checkResp, err := s.goodsServiceConn.CheckStock(ctx, &pb.CheckStockRequest{
 			GoodId:   item.GoodID,
 			Quantity: item.Quantity,
@@ -81,7 +76,6 @@ func (s *OrderService) CreateOrder(ctx context.Context, req *model.CreateOrderRe
 		}
 	}
 
-	// Создаём заказ
 	order := &model.Order{
 		UserID:     req.UserID,
 		Items:      req.Items,
@@ -94,7 +88,6 @@ func (s *OrderService) CreateOrder(ctx context.Context, req *model.CreateOrderRe
 		return nil, err
 	}
 
-	// Зарезервировали товары
 	for _, item := range req.Items {
 		_, err := s.goodsServiceConn.ReserveStock(ctx, &pb.ReserveStockRequest{
 			GoodId:   item.GoodID,
@@ -106,7 +99,6 @@ func (s *OrderService) CreateOrder(ctx context.Context, req *model.CreateOrderRe
 		}
 	}
 
-	// Обрабатываем платёж
 	paymentResp, err := s.paymentServiceConn.ProcessPayment(ctx, &pb.ProcessPaymentRequest{
 		OrderId: order.ID,
 		Amount:  totalPrice,
@@ -119,16 +111,13 @@ func (s *OrderService) CreateOrder(ctx context.Context, req *model.CreateOrderRe
 	if paymentResp.Status == "completed" {
 		order.Status = "paid"
 		s.repo.UpdateOrderStatus(ctx, order.ID, "paid")
-		
-		// После успешной оплаты автоматически создаем доставку
+
 		if order.Address != "" {
 			_, err := s.deliveryServiceConn.CreateDelivery(ctx, &pb.CreateDeliveryRequest{
 				OrderId: order.ID,
 				Address: order.Address,
 			})
 			if err != nil {
-				// Логируем ошибку, но не прерываем создание заказа
-				// Доставка может быть создана позже вручную
 			}
 		}
 	} else {
@@ -136,7 +125,6 @@ func (s *OrderService) CreateOrder(ctx context.Context, req *model.CreateOrderRe
 		s.repo.UpdateOrderStatus(ctx, order.ID, "payment_failed")
 	}
 
-	// Публикуем событие в Kafka
 	s.producer.PublishOrderCreated(ctx, &kafka.OrderEvent{
 		OrderID:    order.ID,
 		UserID:     order.UserID,

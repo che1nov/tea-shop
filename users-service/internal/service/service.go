@@ -13,7 +13,6 @@ import (
 
 var ErrEmailAlreadyExists = repository.ErrEmailAlreadyExists
 
-// UserServiceInterface определяет методы сервиса
 type UserServiceInterface interface {
 	CreateUser(ctx context.Context, req *model.CreateUserRequest) (*model.User, error)
 	GetUser(ctx context.Context, id int64) (*model.User, error)
@@ -40,7 +39,6 @@ func New(repo repository.UserRepositoryInterface, jwtSecret string, adminEmail, 
 }
 
 func (s *UserService) CreateUser(ctx context.Context, req *model.CreateUserRequest) (*model.User, error) {
-	// Хешируем пароль
 	hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 	if err != nil {
 		return nil, err
@@ -99,20 +97,17 @@ func (s *UserService) ValidateTokenWithRole(tokenString string) (int64, string, 
 		return 0, "", "", jwt.ErrSignatureInvalid
 	}
 
-	// Безопасное извлечение user_id
 	userIDFloat, ok := claims["user_id"].(float64)
 	if !ok {
 		return 0, "", "", jwt.ErrSignatureInvalid
 	}
 	userID := int64(userIDFloat)
 
-	// Безопасное извлечение email
 	email, ok := claims["email"].(string)
 	if !ok {
 		return 0, "", "", jwt.ErrSignatureInvalid
 	}
 
-	// Безопасное извлечение role (если есть, иначе "user")
 	role := model.RoleUser
 	if roleVal, ok := claims["role"].(string); ok {
 		role = roleVal
@@ -122,10 +117,7 @@ func (s *UserService) ValidateTokenWithRole(tokenString string) (int64, string, 
 }
 
 func (s *UserService) Login(ctx context.Context, email, password string) (string, error) {
-	// Проверяем админские credentials
-	// Временное логирование для отладки
 	if s.adminEmail == "" || s.adminPassword == "" {
-		// Если переменные окружения не установлены, используем значения по умолчанию
 		if s.adminEmail == "" {
 			s.adminEmail = "admin@example.com"
 		}
@@ -133,20 +125,18 @@ func (s *UserService) Login(ctx context.Context, email, password string) (string
 			s.adminPassword = "admin123"
 		}
 	}
-	
-	// Логирование для отладки (только при попытке входа с админским email)
+
 	if email == s.adminEmail {
-		logger.Info("Admin login attempt", 
-			"input_email", email, 
+		logger.Info("Admin login attempt",
+			"input_email", email,
 			"config_email", s.adminEmail,
-			"email_match", email == s.adminEmail, 
+			"email_match", email == s.adminEmail,
 			"input_password_len", len(password),
 			"config_password_len", len(s.adminPassword),
 			"password_match", password == s.adminPassword)
 	}
-	
+
 	if email == s.adminEmail && password == s.adminPassword {
-		// Создаем виртуального пользователя-админа для токена
 		adminUser := &model.User{
 			ID:    0, // Специальный ID для админа
 			Email: email,
@@ -156,7 +146,6 @@ func (s *UserService) Login(ctx context.Context, email, password string) (string
 		return s.GenerateToken(adminUser)
 	}
 
-	// Обычный пользователь
 	user, err := s.repo.GetUserByEmail(ctx, email)
 	if err != nil {
 		return "", err
@@ -170,7 +159,6 @@ func (s *UserService) Login(ctx context.Context, email, password string) (string
 		return "", err
 	}
 
-	// Убеждаемся, что у обычного пользователя роль "user"
 	user.Role = model.RoleUser
 	return s.GenerateToken(user)
 }

@@ -11,7 +11,6 @@ import (
 	pb "github.com/che1nov/tea-shop/shared/pb"
 )
 
-// MockOrderService - мок для сервиса
 type MockOrderService struct {
 	mock.Mock
 }
@@ -156,4 +155,3 @@ func TestOrderToProto(t *testing.T) {
 	assert.Equal(t, int64(1), pbOrder.Items[0].GoodId)
 	assert.Equal(t, int32(2), pbOrder.Items[0].Quantity)
 }
-

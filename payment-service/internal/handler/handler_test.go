@@ -11,7 +11,6 @@ import (
 	pb "github.com/che1nov/tea-shop/shared/pb"
 )
 
-// MockPaymentService - мок для сервиса
 type MockPaymentService struct {
 	mock.Mock
 }
@@ -129,4 +128,3 @@ func TestGetPayment_NotFound(t *testing.T) {
 	assert.Nil(t, resp)
 	mockService.AssertExpectations(t)
 }
-
