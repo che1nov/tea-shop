@@ -290,3 +290,83 @@ swag init -g cmd/main.go
 
 Swagger UI автоматически обновится после перезапуска API Gateway.
 
+
+## Нагрузочное тестирование (RPS + Kafka)
+
+Сценарии и скрипты находятся в `tests/load/`.
+
+Быстрый запуск:
+
+```bash
+# RPS + прирост сообщений в Kafka (offset delta)
+TOPIC=order-events \
+VUS=50 DURATION=1m \
+K6_SCRIPT=tests/load/api_gateway_goods_read.js \
+bash tests/load/scripts/run_rps_and_kafka.sh
+
+# Чистая нагрузка на Kafka producer
+TOPIC=order-events MESSAGES=20000 \
+bash tests/load/scripts/kafka_produce_load.sh
+```
+
+Что получаете:
+- `rps_avg` — среднее количество HTTP-запросов в секунду.
+- `kafka_messages_delta` — прирост сообщений в Kafka за время теста.
+- `kafka_msgs_per_sec_avg` — средняя скорость сообщений в Kafka.
+- `http_req_failed`/`checks` — качество ответов под нагрузкой.
+
+Подробности: `tests/load/README.md`.
+
+## Запуск проекта (вручную, без скриптов)
+
+Если у вас нет `start_all_services.sh`, можно поднять проект так.
+
+### 1. Поднять инфраструктуру
+
+```bash
+docker compose up -d \
+  postgres-users postgres-goods postgres-orders postgres-payments postgres-delivery \
+  zookeeper kafka prometheus grafana jaeger
+```
+
+### 2. Запустить backend-сервисы (в отдельных терминалах)
+
+```bash
+# 1) users-service
+cd users-service && go run ./cmd/main.go
+
+# 2) goods-service
+cd goods-service && go run ./cmd/main.go
+
+# 3) payment-service
+cd payment-service && go run ./cmd/main.go
+
+# 4) delivery-service
+cd delivery-service && go run ./cmd/main.go
+
+# 5) order-service
+cd order-service && go run ./cmd/main.go
+
+# 6) notify-service (Kafka consumer)
+cd notify-service && go run ./cmd/main.go
+
+# 7) api-gateway
+cd api-gateway && go run ./cmd/main.go
+```
+
+### 3. Запустить frontend
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+### 4. Проверка
+
+- API Gateway: `http://localhost:8080`
+- Swagger UI: `http://localhost:8080/swagger/index.html`
+- Frontend: `http://localhost:5173`
+- Prometheus: `http://localhost:9090`
+- Grafana: `http://localhost:3000` (admin/admin)
+- Jaeger: `http://localhost:16686`
