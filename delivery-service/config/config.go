@@ -27,7 +27,7 @@ func Load() *Config {
 	cfg.Database.Password = getEnv("DB_PASSWORD", "password")
 	cfg.Database.Name = getEnv("DB_NAME", "deliveries_db")
 	cfg.Server.Port = 8005
-	cfg.Services.PaymentService = "localhost:8004"
+	cfg.Services.PaymentService = getEnv("PAYMENT_SERVICE", "localhost:8004")
 
 	return cfg
 }

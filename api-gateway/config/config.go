@@ -22,11 +22,11 @@ func Load() *Config {
 	cfg := &Config{}
 
 	cfg.Server.Port = 8080
-	cfg.Services.UsersService = "localhost:8001"
-	cfg.Services.GoodsService = "localhost:8002"
-	cfg.Services.OrdersService = "localhost:8003"
-	cfg.Services.PaymentsService = "localhost:8004"
-	cfg.Services.DeliveryService = "localhost:8005"
+	cfg.Services.UsersService = getEnv("USERS_SERVICE", "localhost:8001")
+	cfg.Services.GoodsService = getEnv("GOODS_SERVICE", "localhost:8002")
+	cfg.Services.OrdersService = getEnv("ORDERS_SERVICE", "localhost:8003")
+	cfg.Services.PaymentsService = getEnv("PAYMENTS_SERVICE", "localhost:8004")
+	cfg.Services.DeliveryService = getEnv("DELIVERY_SERVICE", "localhost:8005")
 	cfg.JWT.Secret = getEnv("JWT_SECRET", "your-secret-key-change-in-production")
 
 	return cfg

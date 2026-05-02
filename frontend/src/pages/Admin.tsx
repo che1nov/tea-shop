@@ -5,7 +5,7 @@ import { deliveriesApi } from '../api/deliveries'
 import { useState } from 'react'
 import { Plus, Edit, Trash2, X, Package, Truck } from 'lucide-react'
 import { Loading } from '../components/Loading'
-import type { Good, Delivery } from '../types'
+import type { Good } from '../types'
 
 type Tab = 'goods' | 'deliveries'
 

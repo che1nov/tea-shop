@@ -55,6 +55,9 @@ func main() {
 	})
 
 	router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
+	router.GET("/health", func(c *gin.Context) {
+		c.Status(http.StatusOK)
+	})
 
 	router.POST("/api/v1/auth/register", h.RegisterUser)
 	router.POST("/api/v1/auth/login", h.Login)
