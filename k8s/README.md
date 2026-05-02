@@ -62,3 +62,12 @@ Grafana: `admin/admin`.
 ## Секреты
 
 Перед production-запуском поменяй значения в `k8s/secrets.yaml`: `jwt_secret`, `db_password`, `admin_password`, `email_password`.
+
+## CORS
+
+Для прямых запросов браузера к API Gateway настрой `CORS_ALLOWED_ORIGINS` в `k8s/apps.yaml`.
+Значение задается списком через запятую:
+
+```text
+CORS_ALLOWED_ORIGINS=http://localhost:5173,https://tea-shop.example.com
+```

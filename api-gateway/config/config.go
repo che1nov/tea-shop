@@ -1,6 +1,9 @@
 package config
 
-import "os"
+import (
+	"os"
+	"strings"
+)
 
 type Config struct {
 	Server struct {
@@ -16,6 +19,9 @@ type Config struct {
 	JWT struct {
 		Secret string
 	}
+	CORS struct {
+		AllowedOrigins []string
+	}
 }
 
 func Load() *Config {
@@ -28,6 +34,7 @@ func Load() *Config {
 	cfg.Services.PaymentsService = getEnv("PAYMENTS_SERVICE", "localhost:8004")
 	cfg.Services.DeliveryService = getEnv("DELIVERY_SERVICE", "localhost:8005")
 	cfg.JWT.Secret = getEnv("JWT_SECRET", "your-secret-key-change-in-production")
+	cfg.CORS.AllowedOrigins = getEnvList("CORS_ALLOWED_ORIGINS", []string{"http://localhost:5173"})
 
 	return cfg
 }
@@ -37,4 +44,24 @@ func getEnv(key, defaultValue string) string {
 		return value
 	}
 	return defaultValue
+}
+
+func getEnvList(key string, defaultValue []string) []string {
+	value := os.Getenv(key)
+	if value == "" {
+		return defaultValue
+	}
+
+	parts := strings.Split(value, ",")
+	result := make([]string, 0, len(parts))
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if part != "" {
+			result = append(result, part)
+		}
+	}
+	if len(result) == 0 {
+		return defaultValue
+	}
+	return result
 }
