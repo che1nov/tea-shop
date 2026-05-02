@@ -6,8 +6,6 @@ import (
 	"fmt"
 	"time"
 
-	_ "github.com/lib/pq"
-
 	"github.com/che1nov/tea-shop/goods-service/internal/model"
 )
 

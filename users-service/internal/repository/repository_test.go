@@ -9,7 +9,7 @@ import (
 
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/che1nov/tea-shop/users-service/internal/model"
-	"github.com/lib/pq"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -42,7 +42,7 @@ func TestCreateUserDuplicateEmail(t *testing.T) {
 	user := &model.User{Email: "dup@example.com", Name: "Dup", PasswordHash: "hash"}
 	mock.ExpectQuery(regexp.QuoteMeta("INSERT INTO users (email, name, password_hash, created_at, updated_at)")).
 		WithArgs(user.Email, user.Name, user.PasswordHash, sqlmock.AnyArg(), sqlmock.AnyArg()).
-		WillReturnError(&pq.Error{Code: "23505"})
+		WillReturnError(&pgconn.PgError{Code: "23505"})
 
 	err := repo.CreateUser(context.Background(), user)
 	require.Error(t, err)

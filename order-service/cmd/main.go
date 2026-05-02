@@ -10,7 +10,7 @@ import (
 	"syscall"
 	"time"
 
-	_ "github.com/lib/pq"
+	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -43,7 +43,7 @@ func main() {
 		cfg.Database.Port,
 	)
 
-	db, err := sql.Open("postgres", dbConnStr)
+	db, err := sql.Open("pgx", dbConnStr)
 	if err != nil {
 		logger.Error("Failed to open database", "error", err)
 		panic(err)

@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/che1nov/tea-shop/users-service/internal/model"
-	"github.com/lib/pq"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 var ErrEmailAlreadyExists = errors.New("email already exists")
@@ -44,8 +44,8 @@ func (r *UserRepository) CreateUser(ctx context.Context, user *model.User) error
 	).Scan(&user.ID)
 
 	if err != nil {
-		if pqErr, ok := err.(*pq.Error); ok {
-			if pqErr.Code == "23505" { // unique_violation
+		if pgErr, ok := err.(*pgconn.PgError); ok {
+			if pgErr.Code == "23505" { // unique_violation
 				return ErrEmailAlreadyExists
 			}
 		}

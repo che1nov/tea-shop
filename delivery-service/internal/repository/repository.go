@@ -5,8 +5,6 @@ import (
 	"database/sql"
 	"time"
 
-	_ "github.com/lib/pq"
-
 	"github.com/che1nov/tea-shop/delivery-service/internal/model"
 )
 

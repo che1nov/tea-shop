@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/che1nov/tea-shop/payment-service/internal/model"
-	_ "github.com/lib/pq"
 )
 
 // PaymentRepositoryInterface определяет методы репозитория
