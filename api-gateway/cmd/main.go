@@ -21,6 +21,18 @@ import (
 	_ "github.com/che1nov/tea-shop/api-gateway/docs"
 )
 
+// @title           E-commerce Tea Shop API
+// @version         1.0
+// @description     Микросервисная платформа для интернет-магазина чая. API Gateway для управления товарами, заказами, платежами и доставкой.
+// @termsOfService  http://swagger.io/terms/
+// @contact.name    API Support
+// @contact.email   support@example.com
+// @host            localhost:8080
+// @BasePath        /api/v1
+// @schemes         http
+// @securityDefinitions.apikey BearerAuth
+// @in              header
+// @name            Authorization
 func main() {
 	logger.Init()
 

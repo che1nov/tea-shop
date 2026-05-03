@@ -27,7 +27,7 @@ http://localhost:8080/swagger/index.html
 После изменения API endpoints:
 
 ```bash
-swag init -g cmd/main.go
+swag init -g main.go -d cmd,internal/handler -o docs
 ```
 
 ## Конфигурация
@@ -66,4 +66,3 @@ api-gateway/
     ├── swagger.json     # JSON спецификация
     └── swagger.yaml     # YAML спецификация
 ```
-

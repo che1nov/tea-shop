@@ -19,6 +19,139 @@ const docTemplate = `{
     "host": "{{.Host}}",
     "basePath": "{{.BasePath}}",
     "paths": {
+        "/admin/deliveries": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Возвращает список всех доставок с возможностью фильтрации по статусу. Требует роль администратора.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin"
+                ],
+                "summary": "Получить список доставок",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Фильтр по статусу (pending, in_transit, delivered, cancelled)",
+                        "name": "status",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Лимит результатов (по умолчанию: 100)",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Смещение для пагинации (по умолчанию: 0)",
+                        "name": "offset",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Список доставок",
+                        "schema": {
+                            "type": "object"
+                        }
+                    },
+                    "401": {
+                        "description": "Не авторизован",
+                        "schema": {
+                            "type": "object"
+                        }
+                    },
+                    "403": {
+                        "description": "Доступ запрещен: требуется роль администратора",
+                        "schema": {
+                            "type": "object"
+                        }
+                    },
+                    "500": {
+                        "description": "Внутренняя ошибка сервера",
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/deliveries/{id}/status": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Обновляет статус доставки. Требует роль администратора.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin"
+                ],
+                "summary": "Обновить статус доставки",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "ID доставки",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Новый статус",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Статус доставки обновлен",
+                        "schema": {
+                            "type": "object"
+                        }
+                    },
+                    "400": {
+                        "description": "Ошибка валидации",
+                        "schema": {
+                            "type": "object"
+                        }
+                    },
+                    "401": {
+                        "description": "Не авторизован",
+                        "schema": {
+                            "type": "object"
+                        }
+                    },
+                    "403": {
+                        "description": "Доступ запрещен: требуется роль администратора",
+                        "schema": {
+                            "type": "object"
+                        }
+                    },
+                    "500": {
+                        "description": "Внутренняя ошибка сервера",
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                }
+            }
+        },
         "/admin/goods": {
             "post": {
                 "security": [
@@ -26,7 +159,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Создает новый товар (требует права администратора)",
+                "description": "Создает новый товар. Требует роль администратора (role: \"admin\") в JWT токене.",
                 "consumes": [
                     "application/json"
                 ],
@@ -67,6 +200,12 @@ const docTemplate = `{
                             "type": "object"
                         }
                     },
+                    "403": {
+                        "description": "Доступ запрещен: требуется роль администратора",
+                        "schema": {
+                            "type": "object"
+                        }
+                    },
                     "500": {
                         "description": "Внутренняя ошибка сервера",
                         "schema": {
@@ -83,7 +222,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Обновляет информацию о товаре (требует права администратора)",
+                "description": "Обновляет информацию о товаре. Требует роль администратора (role: \"admin\") в JWT токене.",
                 "consumes": [
                     "application/json"
                 ],
@@ -131,6 +270,12 @@ const docTemplate = `{
                             "type": "object"
                         }
                     },
+                    "403": {
+                        "description": "Доступ запрещен: требуется роль администратора",
+                        "schema": {
+                            "type": "object"
+                        }
+                    },
                     "404": {
                         "description": "Товар не найден",
                         "schema": {
@@ -151,7 +296,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Удаляет товар из каталога (требует права администратора)",
+                "description": "Удаляет товар из каталога. Требует роль администратора (role: \"admin\") в JWT токене.",
                 "produces": [
                     "application/json"
                 ],
@@ -183,6 +328,12 @@ const docTemplate = `{
                     },
                     "401": {
                         "description": "Не авторизован",
+                        "schema": {
+                            "type": "object"
+                        }
+                    },
+                    "403": {
+                        "description": "Доступ запрещен: требуется роль администратора",
                         "schema": {
                             "type": "object"
                         }
@@ -687,7 +838,6 @@ const docTemplate = `{
     },
     "securityDefinitions": {
         "BearerAuth": {
-            "description": "JWT токен. Формат: Bearer {token}",
             "type": "apiKey",
             "name": "Authorization",
             "in": "header"
@@ -700,11 +850,13 @@ var SwaggerInfo = &swag.Spec{
 	Version:          "1.0",
 	Host:             "localhost:8080",
 	BasePath:         "/api/v1",
-	Schemes:          []string{},
+	Schemes:          []string{"http"},
 	Title:            "E-commerce Tea Shop API",
 	Description:      "Микросервисная платформа для интернет-магазина чая. API Gateway для управления товарами, заказами, платежами и доставкой.",
 	InfoInstanceName: "swagger",
 	SwaggerTemplate:  docTemplate,
+	LeftDelim:        "{{",
+	RightDelim:       "}}",
 }
 
 func init() {
