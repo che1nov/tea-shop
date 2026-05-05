@@ -2,11 +2,14 @@ package handler
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 
-	"github.com/gin-gonic/gin"
+	"github.com/che1nov/tea-shop/api-gateway/internal/requestctx"
+	"github.com/go-chi/chi/v5"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
@@ -136,29 +139,33 @@ func (h *APIHandler) Close() error {
 // @Failure      400      {object}  object  "Ошибка валидации"
 // @Failure      500      {object}  object  "Внутренняя ошибка сервера"
 // @Router       /auth/register [post]
-func (h *APIHandler) RegisterUser(c *gin.Context) {
+func (h *APIHandler) RegisterUser(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Email    string `json:"email" binding:"required,email"`
 		Name     string `json:"name" binding:"required"`
 		Password string `json:"password" binding:"required,min=6"`
 	}
 
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	if err := decodeJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if req.Email == "" || !strings.Contains(req.Email, "@") || req.Name == "" || len(req.Password) < 6 {
+		writeError(w, http.StatusBadRequest, "invalid registration data")
 		return
 	}
 
-	user, err := h.usersClient.CreateUser(context.Background(), &pb.CreateUserRequest{
+	user, err := h.usersClient.CreateUser(r.Context(), &pb.CreateUserRequest{
 		Email:    req.Email,
 		Name:     req.Name,
 		Password: req.Password,
 	})
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusCreated, user)
+	writeJSON(w, http.StatusCreated, user)
 }
 
 // Login выполняет вход в систему
@@ -172,27 +179,31 @@ func (h *APIHandler) RegisterUser(c *gin.Context) {
 // @Failure      401      {object}  object  "Неверный email или пароль"
 // @Failure      400      {object}  object  "Ошибка валидации"
 // @Router       /auth/login [post]
-func (h *APIHandler) Login(c *gin.Context) {
+func (h *APIHandler) Login(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Email    string `json:"email" binding:"required,email"`
 		Password string `json:"password" binding:"required"`
 	}
 
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	if err := decodeJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if req.Email == "" || !strings.Contains(req.Email, "@") || req.Password == "" {
+		writeError(w, http.StatusBadRequest, "invalid login data")
 		return
 	}
 
-	response, err := h.usersClient.Login(context.Background(), &pb.LoginRequest{
+	response, err := h.usersClient.Login(r.Context(), &pb.LoginRequest{
 		Email:    req.Email,
 		Password: req.Password,
 	})
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid email or password"})
+		writeError(w, http.StatusUnauthorized, "invalid email or password")
 		return
 	}
 
-	c.JSON(http.StatusOK, response)
+	writeJSON(w, http.StatusOK, response)
 }
 
 // GetUser возвращает информацию о текущем пользователе
@@ -205,22 +216,22 @@ func (h *APIHandler) Login(c *gin.Context) {
 // @Failure      401  {object}  object  "Не авторизован"
 // @Failure      500  {object}  object  "Внутренняя ошибка сервера"
 // @Router       /users/me [get]
-func (h *APIHandler) GetUser(c *gin.Context) {
-	userID, exists := c.Get("user_id")
+func (h *APIHandler) GetUser(w http.ResponseWriter, r *http.Request) {
+	userID, exists := userIDFromContext(r.Context())
 	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		writeError(w, http.StatusUnauthorized, "unauthorized")
 		return
 	}
 
-	user, err := h.usersClient.GetUser(context.Background(), &pb.GetUserRequest{
-		UserId: userID.(int64),
+	user, err := h.usersClient.GetUser(r.Context(), &pb.GetUserRequest{
+		UserId: userID,
 	})
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, user)
+	writeJSON(w, http.StatusOK, user)
 }
 
 // CreateGood создает новый товар
@@ -237,7 +248,7 @@ func (h *APIHandler) GetUser(c *gin.Context) {
 // @Failure      403      {object}  object  "Доступ запрещен: требуется роль администратора"
 // @Failure      500      {object}  object  "Внутренняя ошибка сервера"
 // @Router       /admin/goods [post]
-func (h *APIHandler) CreateGood(c *gin.Context) {
+func (h *APIHandler) CreateGood(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Name        string  `json:"name" binding:"required"`
 		Description string  `json:"description" binding:"required"`
@@ -245,23 +256,27 @@ func (h *APIHandler) CreateGood(c *gin.Context) {
 		Stock       int32   `json:"stock" binding:"required,min=0"`
 	}
 
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	if err := decodeJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if req.Name == "" || req.Description == "" || req.Price < 0 || req.Stock < 0 {
+		writeError(w, http.StatusBadRequest, "invalid good data")
 		return
 	}
 
-	good, err := h.goodsClient.CreateGood(context.Background(), &pb.CreateGoodRequest{
+	good, err := h.goodsClient.CreateGood(r.Context(), &pb.CreateGoodRequest{
 		Name:        req.Name,
 		Description: req.Description,
 		Price:       req.Price,
 		Stock:       req.Stock,
 	})
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusCreated, good)
+	writeJSON(w, http.StatusCreated, good)
 }
 
 // UpdateGood обновляет информацию о товаре
@@ -280,9 +295,13 @@ func (h *APIHandler) CreateGood(c *gin.Context) {
 // @Failure      403      {object}  object  "Доступ запрещен: требуется роль администратора"
 // @Failure      500      {object}  object  "Внутренняя ошибка сервера"
 // @Router       /admin/goods/{id} [put]
-func (h *APIHandler) UpdateGood(c *gin.Context) {
-	goodID := c.Param("id")
-	goodIDInt, _ := strconv.ParseInt(goodID, 10, 64)
+func (h *APIHandler) UpdateGood(w http.ResponseWriter, r *http.Request) {
+	goodID := chi.URLParam(r, "id")
+	goodIDInt, err := strconv.ParseInt(goodID, 10, 64)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid good id")
+		return
+	}
 
 	var req struct {
 		Name        string  `json:"name"`
@@ -291,12 +310,16 @@ func (h *APIHandler) UpdateGood(c *gin.Context) {
 		Stock       int32   `json:"stock"`
 	}
 
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	if err := decodeJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if req.Price < 0 || req.Stock < 0 {
+		writeError(w, http.StatusBadRequest, "invalid good data")
 		return
 	}
 
-	good, err := h.goodsClient.UpdateGood(context.Background(), &pb.UpdateGoodRequest{
+	good, err := h.goodsClient.UpdateGood(r.Context(), &pb.UpdateGoodRequest{
 		Id:          goodIDInt,
 		Name:        req.Name,
 		Description: req.Description,
@@ -304,16 +327,16 @@ func (h *APIHandler) UpdateGood(c *gin.Context) {
 		Stock:       req.Stock,
 	})
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
 	if good == nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "good not found"})
+		writeError(w, http.StatusNotFound, "good not found")
 		return
 	}
 
-	c.JSON(http.StatusOK, good)
+	writeJSON(w, http.StatusOK, good)
 }
 
 // DeleteGood удаляет товар
@@ -330,28 +353,28 @@ func (h *APIHandler) UpdateGood(c *gin.Context) {
 // @Failure      403  {object}  object  "Доступ запрещен: требуется роль администратора"
 // @Failure      500  {object}  object  "Внутренняя ошибка сервера"
 // @Router       /admin/goods/{id} [delete]
-func (h *APIHandler) DeleteGood(c *gin.Context) {
-	goodID := c.Param("id")
+func (h *APIHandler) DeleteGood(w http.ResponseWriter, r *http.Request) {
+	goodID := chi.URLParam(r, "id")
 	goodIDInt, err := strconv.ParseInt(goodID, 10, 64)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid good id"})
+		writeError(w, http.StatusBadRequest, "invalid good id")
 		return
 	}
 
-	response, err := h.goodsClient.DeleteGood(context.Background(), &pb.DeleteGoodRequest{
+	response, err := h.goodsClient.DeleteGood(r.Context(), &pb.DeleteGoodRequest{
 		GoodId: goodIDInt,
 	})
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
 	if !response.Success {
-		c.JSON(http.StatusBadRequest, gin.H{"error": response.Message})
+		writeError(w, http.StatusBadRequest, response.Message)
 		return
 	}
 
-	c.JSON(http.StatusOK, response)
+	writeJSON(w, http.StatusOK, response)
 }
 
 // ListGoods возвращает список товаров
@@ -364,23 +387,23 @@ func (h *APIHandler) DeleteGood(c *gin.Context) {
 // @Success      200     {object}  object  "Список товаров"
 // @Failure      500     {object}  object  "Внутренняя ошибка сервера"
 // @Router       /goods [get]
-func (h *APIHandler) ListGoods(c *gin.Context) {
-	limit := c.DefaultQuery("limit", "10")
-	offset := c.DefaultQuery("offset", "0")
+func (h *APIHandler) ListGoods(w http.ResponseWriter, r *http.Request) {
+	limit := queryDefault(r, "limit", "10")
+	offset := queryDefault(r, "offset", "0")
 
 	limitInt, _ := strconv.ParseInt(limit, 10, 32)
 	offsetInt, _ := strconv.ParseInt(offset, 10, 32)
 
-	goods, err := h.goodsClient.ListGoods(context.Background(), &pb.ListGoodsRequest{
+	goods, err := h.goodsClient.ListGoods(r.Context(), &pb.ListGoodsRequest{
 		Limit:  int32(limitInt),
 		Offset: int32(offsetInt),
 	})
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, goods)
+	writeJSON(w, http.StatusOK, goods)
 }
 
 // GetGood возвращает товар по ID
@@ -393,24 +416,28 @@ func (h *APIHandler) ListGoods(c *gin.Context) {
 // @Failure      404  {object}  object  "Товар не найден"
 // @Failure      500  {object}  object  "Внутренняя ошибка сервера"
 // @Router       /goods/{id} [get]
-func (h *APIHandler) GetGood(c *gin.Context) {
-	goodID := c.Param("id")
-	goodIDInt, _ := strconv.ParseInt(goodID, 10, 64)
+func (h *APIHandler) GetGood(w http.ResponseWriter, r *http.Request) {
+	goodID := chi.URLParam(r, "id")
+	goodIDInt, err := strconv.ParseInt(goodID, 10, 64)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid good id")
+		return
+	}
 
-	good, err := h.goodsClient.GetGood(context.Background(), &pb.GetGoodRequest{
+	good, err := h.goodsClient.GetGood(r.Context(), &pb.GetGoodRequest{
 		GoodId: goodIDInt,
 	})
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
 	if good == nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "good not found"})
+		writeError(w, http.StatusNotFound, "good not found")
 		return
 	}
 
-	c.JSON(http.StatusOK, good)
+	writeJSON(w, http.StatusOK, good)
 }
 
 // CreateOrder создает новый заказ
@@ -426,10 +453,10 @@ func (h *APIHandler) GetGood(c *gin.Context) {
 // @Failure      401      {object}  object  "Не авторизован"
 // @Failure      500      {object}  object  "Внутренняя ошибка сервера"
 // @Router       /orders [post]
-func (h *APIHandler) CreateOrder(c *gin.Context) {
-	userID, exists := c.Get("user_id")
+func (h *APIHandler) CreateOrder(w http.ResponseWriter, r *http.Request) {
+	userID, exists := userIDFromContext(r.Context())
 	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		writeError(w, http.StatusUnauthorized, "unauthorized")
 		return
 	}
 
@@ -442,13 +469,21 @@ func (h *APIHandler) CreateOrder(c *gin.Context) {
 		Address string `json:"address" binding:"required"`
 	}
 
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	if err := decodeJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if req.Address == "" || len(req.Items) == 0 {
+		writeError(w, http.StatusBadRequest, "invalid order data")
 		return
 	}
 
 	items := make([]*pb.OrderItem, len(req.Items))
 	for i, item := range req.Items {
+		if item.GoodID <= 0 || item.Quantity <= 0 {
+			writeError(w, http.StatusBadRequest, "invalid order item")
+			return
+		}
 		items[i] = &pb.OrderItem{
 			GoodId:   item.GoodID,
 			Quantity: item.Quantity,
@@ -456,17 +491,17 @@ func (h *APIHandler) CreateOrder(c *gin.Context) {
 		}
 	}
 
-	order, err := h.ordersClient.CreateOrder(context.Background(), &pb.CreateOrderRequest{
-		UserId:  userID.(int64),
+	order, err := h.ordersClient.CreateOrder(r.Context(), &pb.CreateOrderRequest{
+		UserId:  userID,
 		Items:   items,
 		Address: req.Address,
 	})
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusCreated, order)
+	writeJSON(w, http.StatusCreated, order)
 }
 
 // GetOrder возвращает заказ по ID
@@ -481,24 +516,28 @@ func (h *APIHandler) CreateOrder(c *gin.Context) {
 // @Failure      401  {object}  object  "Не авторизован"
 // @Failure      500  {object}  object  "Внутренняя ошибка сервера"
 // @Router       /orders/{id} [get]
-func (h *APIHandler) GetOrder(c *gin.Context) {
-	orderID := c.Param("id")
-	orderIDInt, _ := strconv.ParseInt(orderID, 10, 64)
+func (h *APIHandler) GetOrder(w http.ResponseWriter, r *http.Request) {
+	orderID := chi.URLParam(r, "id")
+	orderIDInt, err := strconv.ParseInt(orderID, 10, 64)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid order id")
+		return
+	}
 
-	order, err := h.ordersClient.GetOrder(context.Background(), &pb.GetOrderRequest{
+	order, err := h.ordersClient.GetOrder(r.Context(), &pb.GetOrderRequest{
 		OrderId: orderIDInt,
 	})
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
 	if order == nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "order not found"})
+		writeError(w, http.StatusNotFound, "order not found")
 		return
 	}
 
-	c.JSON(http.StatusOK, order)
+	writeJSON(w, http.StatusOK, order)
 }
 
 // GetPayment возвращает информацию о платеже
@@ -513,24 +552,28 @@ func (h *APIHandler) GetOrder(c *gin.Context) {
 // @Failure      401  {object}  object  "Не авторизован"
 // @Failure      500  {object}  object  "Внутренняя ошибка сервера"
 // @Router       /payments/{id} [get]
-func (h *APIHandler) GetPayment(c *gin.Context) {
-	paymentID := c.Param("id")
-	paymentIDInt, _ := strconv.ParseInt(paymentID, 10, 64)
+func (h *APIHandler) GetPayment(w http.ResponseWriter, r *http.Request) {
+	paymentID := chi.URLParam(r, "id")
+	paymentIDInt, err := strconv.ParseInt(paymentID, 10, 64)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid payment id")
+		return
+	}
 
-	payment, err := h.paymentsClient.GetPayment(context.Background(), &pb.GetPaymentRequest{
+	payment, err := h.paymentsClient.GetPayment(r.Context(), &pb.GetPaymentRequest{
 		PaymentId: paymentIDInt,
 	})
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
 	if payment == nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "payment not found"})
+		writeError(w, http.StatusNotFound, "payment not found")
 		return
 	}
 
-	c.JSON(http.StatusOK, payment)
+	writeJSON(w, http.StatusOK, payment)
 }
 
 // CreateDelivery создает доставку
@@ -546,27 +589,31 @@ func (h *APIHandler) GetPayment(c *gin.Context) {
 // @Failure      401      {object}  object  "Не авторизован"
 // @Failure      500      {object}  object  "Внутренняя ошибка сервера"
 // @Router       /deliveries [post]
-func (h *APIHandler) CreateDelivery(c *gin.Context) {
+func (h *APIHandler) CreateDelivery(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		OrderID int64  `json:"order_id" binding:"required"`
 		Address string `json:"address" binding:"required"`
 	}
 
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	if err := decodeJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if req.OrderID <= 0 || req.Address == "" {
+		writeError(w, http.StatusBadRequest, "invalid delivery data")
 		return
 	}
 
-	delivery, err := h.deliveryClient.CreateDelivery(context.Background(), &pb.CreateDeliveryRequest{
+	delivery, err := h.deliveryClient.CreateDelivery(r.Context(), &pb.CreateDeliveryRequest{
 		OrderId: req.OrderID,
 		Address: req.Address,
 	})
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusCreated, delivery)
+	writeJSON(w, http.StatusCreated, delivery)
 }
 
 // GetDelivery возвращает информацию о доставке
@@ -581,24 +628,62 @@ func (h *APIHandler) CreateDelivery(c *gin.Context) {
 // @Failure      401  {object}  object  "Не авторизован"
 // @Failure      500  {object}  object  "Внутренняя ошибка сервера"
 // @Router       /deliveries/{id} [get]
-func (h *APIHandler) GetDelivery(c *gin.Context) {
-	deliveryID := c.Param("id")
-	deliveryIDInt, _ := strconv.ParseInt(deliveryID, 10, 64)
+func (h *APIHandler) GetDelivery(w http.ResponseWriter, r *http.Request) {
+	deliveryID := chi.URLParam(r, "id")
+	deliveryIDInt, err := strconv.ParseInt(deliveryID, 10, 64)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid delivery id")
+		return
+	}
 
-	delivery, err := h.deliveryClient.GetDelivery(context.Background(), &pb.GetDeliveryRequest{
+	delivery, err := h.deliveryClient.GetDelivery(r.Context(), &pb.GetDeliveryRequest{
 		DeliveryId: deliveryIDInt,
 	})
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
 	if delivery == nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "delivery not found"})
+		writeError(w, http.StatusNotFound, "delivery not found")
 		return
 	}
 
-	c.JSON(http.StatusOK, delivery)
+	writeJSON(w, http.StatusOK, delivery)
+}
+
+type errorResponse struct {
+	Error string `json:"error"`
+}
+
+func decodeJSON(r *http.Request, dst any) error {
+	defer r.Body.Close()
+	return json.NewDecoder(r.Body).Decode(dst)
+}
+
+func writeJSON(w http.ResponseWriter, status int, value any) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	if err := json.NewEncoder(w).Encode(value); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+}
+
+func writeError(w http.ResponseWriter, status int, message string) {
+	writeJSON(w, status, errorResponse{Error: message})
+}
+
+func queryDefault(r *http.Request, key string, defaultValue string) string {
+	value := r.URL.Query().Get(key)
+	if value == "" {
+		return defaultValue
+	}
+	return value
+}
+
+func userIDFromContext(ctx context.Context) (int64, bool) {
+	userID, ok := ctx.Value(requestctx.UserIDKey).(int64)
+	return userID, ok
 }
 
 // ListDeliveries возвращает список доставок (только для админа)
@@ -615,25 +700,25 @@ func (h *APIHandler) GetDelivery(c *gin.Context) {
 // @Failure      403     {object}  object  "Доступ запрещен: требуется роль администратора"
 // @Failure      500     {object}  object  "Внутренняя ошибка сервера"
 // @Router       /admin/deliveries [get]
-func (h *APIHandler) ListDeliveries(c *gin.Context) {
-	limitStr := c.DefaultQuery("limit", "100")
-	offsetStr := c.DefaultQuery("offset", "0")
-	status := c.Query("status")
+func (h *APIHandler) ListDeliveries(w http.ResponseWriter, r *http.Request) {
+	limitStr := queryDefault(r, "limit", "100")
+	offsetStr := queryDefault(r, "offset", "0")
+	status := r.URL.Query().Get("status")
 
 	limit, _ := strconv.ParseInt(limitStr, 10, 32)
 	offset, _ := strconv.ParseInt(offsetStr, 10, 32)
 
-	response, err := h.deliveryClient.ListDeliveries(context.Background(), &pb.ListDeliveriesRequest{
+	response, err := h.deliveryClient.ListDeliveries(r.Context(), &pb.ListDeliveriesRequest{
 		Limit:  int32(limit),
 		Offset: int32(offset),
 		Status: status,
 	})
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, response)
+	writeJSON(w, http.StatusOK, response)
 }
 
 // UpdateDeliveryStatus обновляет статус доставки (только для админа)
@@ -651,11 +736,11 @@ func (h *APIHandler) ListDeliveries(c *gin.Context) {
 // @Failure      403      {object}  object  "Доступ запрещен: требуется роль администратора"
 // @Failure      500      {object}  object  "Внутренняя ошибка сервера"
 // @Router       /admin/deliveries/{id}/status [put]
-func (h *APIHandler) UpdateDeliveryStatus(c *gin.Context) {
-	deliveryID := c.Param("id")
+func (h *APIHandler) UpdateDeliveryStatus(w http.ResponseWriter, r *http.Request) {
+	deliveryID := chi.URLParam(r, "id")
 	deliveryIDInt, err := strconv.ParseInt(deliveryID, 10, 64)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid delivery id"})
+		writeError(w, http.StatusBadRequest, "invalid delivery id")
 		return
 	}
 
@@ -663,19 +748,23 @@ func (h *APIHandler) UpdateDeliveryStatus(c *gin.Context) {
 		Status string `json:"status" binding:"required"`
 	}
 
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	if err := decodeJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if req.Status == "" {
+		writeError(w, http.StatusBadRequest, "invalid delivery status")
 		return
 	}
 
-	delivery, err := h.deliveryClient.UpdateDeliveryStatus(context.Background(), &pb.UpdateDeliveryStatusRequest{
+	delivery, err := h.deliveryClient.UpdateDeliveryStatus(r.Context(), &pb.UpdateDeliveryStatusRequest{
 		DeliveryId: deliveryIDInt,
 		Status:     req.Status,
 	})
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, delivery)
+	writeJSON(w, http.StatusOK, delivery)
 }

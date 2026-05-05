@@ -3,34 +3,26 @@ package middleware
 import (
 	"net/http"
 
-	"github.com/gin-gonic/gin"
+	"github.com/che1nov/tea-shop/api-gateway/internal/requestctx"
 )
 
 const RoleAdmin = "admin"
 
-// AdminMiddleware проверяет, что пользователь имеет роль администратора
-func AdminMiddleware() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		role, exists := c.Get("role")
-		if !exists {
-			c.JSON(http.StatusForbidden, gin.H{"error": "role not found in token"})
-			c.Abort()
-			return
-		}
+func AdminMiddleware() func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			role, ok := r.Context().Value(requestctx.RoleKey).(string)
+			if !ok {
+				writeError(w, http.StatusForbidden, "role not found in token")
+				return
+			}
 
-		roleStr, ok := role.(string)
-		if !ok {
-			c.JSON(http.StatusForbidden, gin.H{"error": "invalid role type"})
-			c.Abort()
-			return
-		}
+			if role != RoleAdmin {
+				writeError(w, http.StatusForbidden, "access denied: admin role required")
+				return
+			}
 
-		if roleStr != RoleAdmin {
-			c.JSON(http.StatusForbidden, gin.H{"error": "access denied: admin role required"})
-			c.Abort()
-			return
-		}
-
-		c.Next()
+			next.ServeHTTP(w, r)
+		})
 	}
 }

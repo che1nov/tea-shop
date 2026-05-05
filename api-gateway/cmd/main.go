@@ -13,10 +13,10 @@ import (
 	"github.com/che1nov/tea-shop/api-gateway/internal/handler"
 	"github.com/che1nov/tea-shop/api-gateway/internal/middleware"
 	"github.com/che1nov/tea-shop/shared/pkg/logger"
-	"github.com/gin-gonic/gin"
+	"github.com/go-chi/chi/v5"
+	chimiddleware "github.com/go-chi/chi/v5/middleware"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	swaggerFiles "github.com/swaggo/files"
-	ginSwagger "github.com/swaggo/gin-swagger"
+	httpSwagger "github.com/swaggo/http-swagger"
 
 	_ "github.com/che1nov/tea-shop/api-gateway/docs"
 )
@@ -50,46 +50,47 @@ func main() {
 		panic(err)
 	}
 
-	router := gin.Default()
-
+	router := chi.NewRouter()
+	router.Use(chimiddleware.Logger)
+	router.Use(chimiddleware.Recoverer)
 	router.Use(middleware.CORSMiddleware(cfg.CORS.AllowedOrigins))
 
-	router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
-	router.GET("/health", func(c *gin.Context) {
-		c.Status(http.StatusOK)
+	router.Get("/swagger/*", httpSwagger.Handler(httpSwagger.URL("/swagger/doc.json")))
+	router.Get("/health", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
 	})
 
-	router.POST("/api/v1/auth/register", h.RegisterUser)
-	router.POST("/api/v1/auth/login", h.Login)
+	router.Post("/api/v1/auth/register", h.RegisterUser)
+	router.Post("/api/v1/auth/login", h.Login)
 
-	router.GET("/api/v1/goods", h.ListGoods)
-	router.GET("/api/v1/goods/:id", h.GetGood)
+	router.Get("/api/v1/goods", h.ListGoods)
+	router.Get("/api/v1/goods/{id}", h.GetGood)
 
-	admin := router.Group("/api/v1/admin")
-	admin.Use(middleware.AuthMiddleware(cfg.JWT.Secret))
-	admin.Use(middleware.AdminMiddleware())
-	{
-		admin.POST("/goods", h.CreateGood)
-		admin.PUT("/goods/:id", h.UpdateGood)
-		admin.DELETE("/goods/:id", h.DeleteGood)
+	router.Route("/api/v1/admin", func(r chi.Router) {
+		r.Use(middleware.AuthMiddleware(cfg.JWT.Secret))
+		r.Use(middleware.AdminMiddleware())
 
-		admin.GET("/deliveries", h.ListDeliveries)
-		admin.PUT("/deliveries/:id/status", h.UpdateDeliveryStatus)
-	}
+		r.Post("/goods", h.CreateGood)
+		r.Put("/goods/{id}", h.UpdateGood)
+		r.Delete("/goods/{id}", h.DeleteGood)
 
-	protected := router.Group("/api/v1")
-	protected.Use(middleware.AuthMiddleware(cfg.JWT.Secret))
-	{
-		protected.GET("/users/me", h.GetUser)
+		r.Get("/deliveries", h.ListDeliveries)
+		r.Put("/deliveries/{id}/status", h.UpdateDeliveryStatus)
+	})
 
-		protected.POST("/orders", h.CreateOrder)
-		protected.GET("/orders/:id", h.GetOrder)
+	router.Route("/api/v1", func(r chi.Router) {
+		r.Use(middleware.AuthMiddleware(cfg.JWT.Secret))
 
-		protected.GET("/payments/:id", h.GetPayment)
+		r.Get("/users/me", h.GetUser)
 
-		protected.POST("/deliveries", h.CreateDelivery)
-		protected.GET("/deliveries/:id", h.GetDelivery)
-	}
+		r.Post("/orders", h.CreateOrder)
+		r.Get("/orders/{id}", h.GetOrder)
+
+		r.Get("/payments/{id}", h.GetPayment)
+
+		r.Post("/deliveries", h.CreateDelivery)
+		r.Get("/deliveries/{id}", h.GetDelivery)
+	})
 
 	metricsPort := 9007
 	metricsMux := http.NewServeMux()

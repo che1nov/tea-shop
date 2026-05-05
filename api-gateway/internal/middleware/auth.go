@@ -1,60 +1,59 @@
 package middleware
 
 import (
+	"context"
 	"net/http"
 	"strings"
 
-	"github.com/gin-gonic/gin"
+	"github.com/che1nov/tea-shop/api-gateway/internal/requestctx"
 	"github.com/golang-jwt/jwt/v5"
 )
 
-func AuthMiddleware(jwtSecret string) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		authHeader := c.GetHeader("Authorization")
-		if authHeader == "" {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "missing authorization header"})
-			c.Abort()
-			return
-		}
+func AuthMiddleware(jwtSecret string) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			authHeader := r.Header.Get("Authorization")
+			if authHeader == "" {
+				writeError(w, http.StatusUnauthorized, "missing authorization header")
+				return
+			}
 
-		parts := strings.Split(authHeader, " ")
-		if len(parts) != 2 || parts[0] != "Bearer" {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid authorization header"})
-			c.Abort()
-			return
-		}
+			parts := strings.Split(authHeader, " ")
+			if len(parts) != 2 || parts[0] != "Bearer" {
+				writeError(w, http.StatusUnauthorized, "invalid authorization header")
+				return
+			}
 
-		tokenString := parts[1]
-		token, err := jwt.ParseWithClaims(
-			tokenString,
-			jwt.MapClaims{},
-			func(token *jwt.Token) (interface{}, error) {
-				return []byte(jwtSecret), nil
-			},
-		)
+			tokenString := parts[1]
+			token, err := jwt.ParseWithClaims(
+				tokenString,
+				jwt.MapClaims{},
+				func(token *jwt.Token) (interface{}, error) {
+					return []byte(jwtSecret), nil
+				},
+			)
 
-		if err != nil || !token.Valid {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid token"})
-			c.Abort()
-			return
-		}
+			if err != nil || !token.Valid {
+				writeError(w, http.StatusUnauthorized, "invalid token")
+				return
+			}
 
-		claims, ok := token.Claims.(jwt.MapClaims)
-		if !ok {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid token claims"})
-			c.Abort()
-			return
-		}
+			claims, ok := token.Claims.(jwt.MapClaims)
+			if !ok {
+				writeError(w, http.StatusUnauthorized, "invalid token claims")
+				return
+			}
 
-		c.Set("user_id", int64(claims["user_id"].(float64)))
-		c.Set("email", claims["email"].(string))
+			ctx := context.WithValue(r.Context(), requestctx.UserIDKey, int64(claims["user_id"].(float64)))
+			ctx = context.WithValue(ctx, requestctx.EmailKey, claims["email"].(string))
 
-		if role, ok := claims["role"].(string); ok {
-			c.Set("role", role)
-		} else {
-			c.Set("role", "user")
-		}
+			if role, ok := claims["role"].(string); ok {
+				ctx = context.WithValue(ctx, requestctx.RoleKey, role)
+			} else {
+				ctx = context.WithValue(ctx, requestctx.RoleKey, "user")
+			}
 
-		c.Next()
+			next.ServeHTTP(w, r.WithContext(ctx))
+		})
 	}
 }

@@ -5,20 +5,17 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/gin-gonic/gin"
+	"github.com/che1nov/tea-shop/api-gateway/internal/requestctx"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/stretchr/testify/require"
 )
 
 func TestAuthMiddlewareSuccessAndRoleDefault(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	r := gin.New()
-	r.Use(AuthMiddleware("secret"))
-	r.GET("/", func(c *gin.Context) {
-		_, roleExists := c.Get("role")
+	handler := AuthMiddleware("secret")(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, roleExists := r.Context().Value(requestctx.RoleKey).(string)
 		require.True(t, roleExists)
-		c.Status(http.StatusOK)
-	})
+		w.WriteHeader(http.StatusOK)
+	}))
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{"user_id": 1, "email": "u@test.local"})
 	tokenString, err := token.SignedString([]byte("secret"))
@@ -27,20 +24,19 @@ func TestAuthMiddlewareSuccessAndRoleDefault(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	req.Header.Set("Authorization", "Bearer "+tokenString)
 	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
+	handler.ServeHTTP(w, req)
 
 	require.Equal(t, http.StatusOK, w.Code)
 }
 
 func TestAuthMiddlewareInvalidHeader(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	r := gin.New()
-	r.Use(AuthMiddleware("secret"))
-	r.GET("/", func(c *gin.Context) { c.Status(http.StatusOK) })
+	handler := AuthMiddleware("secret")(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
 
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
+	handler.ServeHTTP(w, req)
 
 	require.Equal(t, http.StatusUnauthorized, w.Code)
 }

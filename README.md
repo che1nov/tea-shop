@@ -6,7 +6,7 @@
 
 Проект реализован с использованием принципов **Clean Architecture** и **микросервисной архитектуры**:
 
-- **Backend**: Go (gRPC, Gin)
+- **Backend**: Go (gRPC, chi)
 - **Frontend**: React + TypeScript + Vite
 - **База данных**: PostgreSQL (отдельная БД для каждого сервиса)
 - **Message Queue**: Kafka
@@ -229,7 +229,7 @@ go test ./...
 ### Backend:
 - Go 1.25
 - gRPC
-- Gin (HTTP router)
+- chi (HTTP router)
 - PostgreSQL
 - Kafka
 - JWT для аутентификации
