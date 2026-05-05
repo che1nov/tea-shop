@@ -326,7 +326,7 @@ bash tests/load/scripts/kafka_produce_load.sh
 ```bash
 docker compose up -d \
   postgres-users postgres-goods postgres-orders postgres-payments postgres-delivery \
-  zookeeper kafka prometheus grafana jaeger
+  kafka prometheus grafana jaeger
 ```
 
 ### 2. Запустить backend-сервисы (в отдельных терминалах)
