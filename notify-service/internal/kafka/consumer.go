@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 
 	"github.com/che1nov/tea-shop/shared/pkg/logger"
+	appmetrics "github.com/che1nov/tea-shop/shared/pkg/metrics"
 	"github.com/segmentio/kafka-go"
 )
 
@@ -34,20 +35,27 @@ func (c *Consumer) Start(ctx context.Context, handleEvent func(*OrderEvent) erro
 	for {
 		msg, err := c.reader.ReadMessage(ctx)
 		if err != nil {
+			appmetrics.ObserveKafkaMessage("notify-service", "order-events", "unknown", "consumed", "read_error")
 			return err
 		}
 
 		event := &OrderEvent{}
 		if err := json.Unmarshal(msg.Value, event); err != nil {
+			appmetrics.ObserveKafkaMessage("notify-service", "order-events", "unknown", "consumed", "decode_error")
 			logger.Error("Failed to unmarshal event", "error", err)
 			continue
 		}
 
+		appmetrics.ObserveKafkaMessage("notify-service", "order-events", event.EventType, "consumed", "received")
 		logger.Info("Received event", "event_type", event.EventType, "order_id", event.OrderID)
 
 		if err := handleEvent(event); err != nil {
+			appmetrics.ObserveKafkaMessage("notify-service", "order-events", event.EventType, "consumed", "handler_error")
 			logger.Error("Failed to handle event", "error", err, "event_type", event.EventType, "order_id", event.OrderID)
+			continue
 		}
+
+		appmetrics.ObserveKafkaMessage("notify-service", "order-events", event.EventType, "consumed", "success")
 	}
 }
 

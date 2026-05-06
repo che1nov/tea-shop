@@ -6,6 +6,7 @@ import (
 
 	"github.com/che1nov/tea-shop/payment-service/internal/model"
 	"github.com/che1nov/tea-shop/payment-service/internal/repository"
+	appmetrics "github.com/che1nov/tea-shop/shared/pkg/metrics"
 )
 
 // PaymentServiceInterface определяет методы сервиса
@@ -35,6 +36,7 @@ func (s *PaymentService) ProcessPayment(ctx context.Context, req *model.ProcessP
 	}
 
 	if err := s.repo.CreatePayment(ctx, payment); err != nil {
+		appmetrics.ObserveBusinessEvent("payment-service", "payment_processed", "error")
 		return nil, err
 	}
 
@@ -48,9 +50,11 @@ func (s *PaymentService) ProcessPayment(ctx context.Context, req *model.ProcessP
 	}
 
 	if err := s.repo.UpdatePaymentStatus(ctx, payment.ID, payment.Status); err != nil {
+		appmetrics.ObserveBusinessEvent("payment-service", "payment_processed", "error")
 		return nil, err
 	}
 
+	appmetrics.ObserveBusinessEvent("payment-service", "payment_processed", payment.Status)
 	return payment, nil
 }
 

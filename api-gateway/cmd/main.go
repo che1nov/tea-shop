@@ -13,6 +13,7 @@ import (
 	"github.com/che1nov/tea-shop/api-gateway/internal/handler"
 	"github.com/che1nov/tea-shop/api-gateway/internal/middleware"
 	"github.com/che1nov/tea-shop/shared/pkg/logger"
+	appmetrics "github.com/che1nov/tea-shop/shared/pkg/metrics"
 	"github.com/go-chi/chi/v5"
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -53,6 +54,12 @@ func main() {
 	router := chi.NewRouter()
 	router.Use(chimiddleware.Logger)
 	router.Use(chimiddleware.Recoverer)
+	router.Use(appmetrics.HTTPMiddleware("api-gateway", func(r *http.Request) string {
+		if routeContext := chi.RouteContext(r.Context()); routeContext != nil {
+			return routeContext.RoutePattern()
+		}
+		return ""
+	}))
 	router.Use(middleware.CORSMiddleware(cfg.CORS.AllowedOrigins))
 
 	router.Get("/swagger/*", httpSwagger.Handler(httpSwagger.URL("/swagger/doc.json")))

@@ -5,6 +5,7 @@ import (
 
 	"github.com/che1nov/tea-shop/delivery-service/internal/model"
 	"github.com/che1nov/tea-shop/delivery-service/internal/repository"
+	appmetrics "github.com/che1nov/tea-shop/shared/pkg/metrics"
 )
 
 // DeliveryServiceInterface определяет методы сервиса
@@ -34,9 +35,11 @@ func (s *DeliveryService) CreateDelivery(ctx context.Context, req *model.CreateD
 	}
 
 	if err := s.repo.CreateDelivery(ctx, delivery); err != nil {
+		appmetrics.ObserveBusinessEvent("delivery-service", "delivery_created", "error")
 		return nil, err
 	}
 
+	appmetrics.ObserveBusinessEvent("delivery-service", "delivery_created", "success")
 	return delivery, nil
 }
 
@@ -50,9 +53,11 @@ func (s *DeliveryService) GetDeliveryByOrderID(ctx context.Context, orderID int6
 
 func (s *DeliveryService) UpdateDeliveryStatus(ctx context.Context, id int64, status string) (*model.Delivery, error) {
 	if err := s.repo.UpdateDeliveryStatus(ctx, id, status); err != nil {
+		appmetrics.ObserveBusinessEvent("delivery-service", "delivery_status_updated", "error")
 		return nil, err
 	}
 
+	appmetrics.ObserveBusinessEvent("delivery-service", "delivery_status_updated", status)
 	return s.repo.GetDelivery(ctx, id)
 }
 

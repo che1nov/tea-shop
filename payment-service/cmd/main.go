@@ -19,6 +19,7 @@ import (
 
 	pb "github.com/che1nov/tea-shop/shared/pb"
 	"github.com/che1nov/tea-shop/shared/pkg/logger"
+	"github.com/che1nov/tea-shop/shared/pkg/metrics/grpcmetrics"
 
 	"github.com/che1nov/tea-shop/payment-service/config"
 	"github.com/che1nov/tea-shop/payment-service/internal/handler"
@@ -109,7 +110,9 @@ func main() {
 		return
 	}
 
-	grpcServer := grpc.NewServer()
+	grpcServer := grpc.NewServer(
+		grpc.UnaryInterceptor(grpcmetrics.UnaryServerInterceptor("payment-service")),
+	)
 	pb.RegisterPaymentsServiceServer(grpcServer, hdlr)
 
 	healthServer := health.NewServer()

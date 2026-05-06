@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/che1nov/tea-shop/shared/pkg/logger"
+	appmetrics "github.com/che1nov/tea-shop/shared/pkg/metrics"
 	"github.com/che1nov/tea-shop/users-service/internal/model"
 	"github.com/che1nov/tea-shop/users-service/internal/repository"
 	"github.com/golang-jwt/jwt/v5"
@@ -41,6 +42,7 @@ func New(repo repository.UserRepositoryInterface, jwtSecret string, adminEmail, 
 func (s *UserService) CreateUser(ctx context.Context, req *model.CreateUserRequest) (*model.User, error) {
 	hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 	if err != nil {
+		appmetrics.ObserveBusinessEvent("users-service", "user_created", "error")
 		return nil, err
 	}
 
@@ -52,9 +54,11 @@ func (s *UserService) CreateUser(ctx context.Context, req *model.CreateUserReque
 	}
 
 	if err := s.repo.CreateUser(ctx, user); err != nil {
+		appmetrics.ObserveBusinessEvent("users-service", "user_created", "error")
 		return nil, err
 	}
 
+	appmetrics.ObserveBusinessEvent("users-service", "user_created", "success")
 	return user, nil
 }
 
@@ -143,22 +147,37 @@ func (s *UserService) Login(ctx context.Context, email, password string) (string
 			Name:  "Administrator",
 			Role:  model.RoleAdmin,
 		}
-		return s.GenerateToken(adminUser)
+		token, err := s.GenerateToken(adminUser)
+		if err != nil {
+			appmetrics.ObserveBusinessEvent("users-service", "login", "error")
+			return "", err
+		}
+		appmetrics.ObserveBusinessEvent("users-service", "login", "admin_success")
+		return token, nil
 	}
 
 	user, err := s.repo.GetUserByEmail(ctx, email)
 	if err != nil {
+		appmetrics.ObserveBusinessEvent("users-service", "login", "error")
 		return "", err
 	}
 
 	if user == nil {
+		appmetrics.ObserveBusinessEvent("users-service", "login", "invalid_credentials")
 		return "", jwt.ErrSignatureInvalid
 	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(password)); err != nil {
+		appmetrics.ObserveBusinessEvent("users-service", "login", "invalid_credentials")
 		return "", err
 	}
 
 	user.Role = model.RoleUser
-	return s.GenerateToken(user)
+	token, err := s.GenerateToken(user)
+	if err != nil {
+		appmetrics.ObserveBusinessEvent("users-service", "login", "error")
+		return "", err
+	}
+	appmetrics.ObserveBusinessEvent("users-service", "login", "success")
+	return token, nil
 }

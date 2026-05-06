@@ -6,6 +6,7 @@ import (
 
 	"github.com/che1nov/tea-shop/goods-service/internal/model"
 	"github.com/che1nov/tea-shop/goods-service/internal/repository"
+	appmetrics "github.com/che1nov/tea-shop/shared/pkg/metrics"
 )
 
 // GoodsServiceInterface определяет методы сервиса
@@ -39,9 +40,11 @@ func (s *GoodsService) CreateGood(ctx context.Context, req *model.CreateGoodRequ
 	}
 
 	if err := s.repo.CreateGood(ctx, good); err != nil {
+		appmetrics.ObserveBusinessEvent("goods-service", "good_created", "error")
 		return nil, err
 	}
 
+	appmetrics.ObserveBusinessEvent("goods-service", "good_created", "success")
 	return good, nil
 }
 
@@ -80,14 +83,22 @@ func (s *GoodsService) UpdateGood(ctx context.Context, id int64, req *model.Upda
 	}
 
 	if err := s.repo.UpdateGood(ctx, good); err != nil {
+		appmetrics.ObserveBusinessEvent("goods-service", "good_updated", "error")
 		return nil, err
 	}
 
+	appmetrics.ObserveBusinessEvent("goods-service", "good_updated", "success")
 	return good, nil
 }
 
 func (s *GoodsService) DeleteGood(ctx context.Context, id int64) error {
-	return s.repo.DeleteGood(ctx, id)
+	if err := s.repo.DeleteGood(ctx, id); err != nil {
+		appmetrics.ObserveBusinessEvent("goods-service", "good_deleted", "error")
+		return err
+	}
+
+	appmetrics.ObserveBusinessEvent("goods-service", "good_deleted", "success")
+	return nil
 }
 
 func (s *GoodsService) GetTotalGoods(ctx context.Context) (int32, error) {
@@ -110,10 +121,13 @@ func (s *GoodsService) CheckStock(ctx context.Context, goodID int64, quantity in
 func (s *GoodsService) ReserveStock(ctx context.Context, goodID int64, quantity int32, orderID int64) (bool, error) {
 	err := s.repo.ReserveStock(ctx, goodID, quantity, orderID)
 	if err == sql.ErrNoRows {
+		appmetrics.ObserveBusinessEvent("goods-service", "stock_reserved", "not_available")
 		return false, nil
 	}
 	if err != nil {
+		appmetrics.ObserveBusinessEvent("goods-service", "stock_reserved", "error")
 		return false, err
 	}
+	appmetrics.ObserveBusinessEvent("goods-service", "stock_reserved", "success")
 	return true, nil
 }

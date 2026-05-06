@@ -1,0 +1,11 @@
+apiVersion: 1
+
+providers:
+  - name: Tea Shop
+    orgId: 1
+    folder: Tea Shop
+    type: file
+    disableDeletion: false
+    editable: true
+    options:
+      path: /var/lib/grafana/dashboards

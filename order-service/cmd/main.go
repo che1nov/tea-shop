@@ -25,6 +25,7 @@ import (
 	"github.com/che1nov/tea-shop/order-service/internal/service"
 	pb "github.com/che1nov/tea-shop/shared/pb"
 	"github.com/che1nov/tea-shop/shared/pkg/logger"
+	"github.com/che1nov/tea-shop/shared/pkg/metrics/grpcmetrics"
 )
 
 func main() {
@@ -153,7 +154,9 @@ func main() {
 		return
 	}
 
-	grpcServer := grpc.NewServer()
+	grpcServer := grpc.NewServer(
+		grpc.UnaryInterceptor(grpcmetrics.UnaryServerInterceptor("order-service")),
+	)
 	pb.RegisterOrdersServiceServer(grpcServer, hdlr)
 
 	// Health check

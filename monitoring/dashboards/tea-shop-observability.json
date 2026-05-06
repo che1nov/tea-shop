@@ -1,0 +1,138 @@
+{
+  "title": "Tea Shop Observability",
+  "tags": ["tea-shop", "observability"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "15s",
+  "panels": [
+    {
+      "id": 1,
+      "title": "Service Health",
+      "type": "stat",
+      "gridPos": {"h": 5, "w": 24, "x": 0, "y": 0},
+      "targets": [
+        {
+          "expr": "up{job=~\"users-service|goods-service|order-service|payment-service|delivery-service|notify-service|api-gateway\"}",
+          "legendFormat": "{{job}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {"text": "DOWN", "color": "red"},
+                "1": {"text": "UP", "color": "green"}
+              }
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"value": null, "color": "red"},
+              {"value": 1, "color": "green"}
+            ]
+          }
+        }
+      },
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": ["lastNotNull"],
+          "fields": ""
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value",
+        "graphMode": "none"
+      }
+    },
+    {
+      "id": 2,
+      "title": "HTTP Requests Rate",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 5},
+      "targets": [
+        {
+          "expr": "sum by (service, route, status) (rate(tea_shop_http_requests_total[5m]))",
+          "legendFormat": "{{service}} {{route}} {{status}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {"defaults": {"unit": "reqps"}}
+    },
+    {
+      "id": 3,
+      "title": "HTTP p95 Latency",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 5},
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum by (le, service, route) (rate(tea_shop_http_request_duration_seconds_bucket[5m])))",
+          "legendFormat": "{{service}} {{route}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {"defaults": {"unit": "s"}}
+    },
+    {
+      "id": 4,
+      "title": "gRPC Requests Rate",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 13},
+      "targets": [
+        {
+          "expr": "sum by (service, method, code) (rate(tea_shop_grpc_requests_total[5m]))",
+          "legendFormat": "{{service}} {{method}} {{code}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {"defaults": {"unit": "reqps"}}
+    },
+    {
+      "id": 5,
+      "title": "gRPC p95 Latency",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 13},
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum by (le, service, method) (rate(tea_shop_grpc_request_duration_seconds_bucket[5m])))",
+          "legendFormat": "{{service}} {{method}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {"defaults": {"unit": "s"}}
+    },
+    {
+      "id": 6,
+      "title": "Business Events",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 21},
+      "targets": [
+        {
+          "expr": "sum by (service, event, status) (rate(tea_shop_business_events_total[5m]))",
+          "legendFormat": "{{service}} {{event}} {{status}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {"defaults": {"unit": "ops"}}
+    },
+    {
+      "id": 7,
+      "title": "Kafka Messages",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 21},
+      "targets": [
+        {
+          "expr": "sum by (service, topic, event, direction, status) (rate(tea_shop_kafka_messages_total[5m]))",
+          "legendFormat": "{{service}} {{topic}} {{event}} {{direction}} {{status}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {"defaults": {"unit": "ops"}}
+    }
+  ]
+}

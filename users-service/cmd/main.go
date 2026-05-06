@@ -19,6 +19,7 @@ import (
 
 	pb "github.com/che1nov/tea-shop/shared/pb"
 	"github.com/che1nov/tea-shop/shared/pkg/logger"
+	"github.com/che1nov/tea-shop/shared/pkg/metrics/grpcmetrics"
 	"github.com/che1nov/tea-shop/users-service/config"
 	"github.com/che1nov/tea-shop/users-service/internal/handler"
 	"github.com/che1nov/tea-shop/users-service/internal/repository"
@@ -118,7 +119,9 @@ func main() {
 		return
 	}
 
-	grpcServer := grpc.NewServer()
+	grpcServer := grpc.NewServer(
+		grpc.UnaryInterceptor(grpcmetrics.UnaryServerInterceptor("users-service")),
+	)
 	pb.RegisterUsersServiceServer(grpcServer, hdlr)
 
 	// Health check

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 
+	appmetrics "github.com/che1nov/tea-shop/shared/pkg/metrics"
 	"github.com/segmentio/kafka-go"
 )
 
@@ -34,13 +35,20 @@ func (p *Producer) PublishOrderCreated(ctx context.Context, event *OrderEvent) e
 
 	data, err := json.Marshal(event)
 	if err != nil {
+		appmetrics.ObserveKafkaMessage("order-service", "order-events", event.EventType, "produced", "marshal_error")
 		return err
 	}
 
-	return p.writer.WriteMessages(ctx, kafka.Message{
+	if err := p.writer.WriteMessages(ctx, kafka.Message{
 		Key:   []byte("order_" + string(rune(event.OrderID))),
 		Value: data,
-	})
+	}); err != nil {
+		appmetrics.ObserveKafkaMessage("order-service", "order-events", event.EventType, "produced", "error")
+		return err
+	}
+
+	appmetrics.ObserveKafkaMessage("order-service", "order-events", event.EventType, "produced", "success")
+	return nil
 }
 
 func (p *Producer) PublishOrderCompleted(ctx context.Context, event *OrderEvent) error {
@@ -48,13 +56,20 @@ func (p *Producer) PublishOrderCompleted(ctx context.Context, event *OrderEvent)
 
 	data, err := json.Marshal(event)
 	if err != nil {
+		appmetrics.ObserveKafkaMessage("order-service", "order-events", event.EventType, "produced", "marshal_error")
 		return err
 	}
 
-	return p.writer.WriteMessages(ctx, kafka.Message{
+	if err := p.writer.WriteMessages(ctx, kafka.Message{
 		Key:   []byte("order_" + string(rune(event.OrderID))),
 		Value: data,
-	})
+	}); err != nil {
+		appmetrics.ObserveKafkaMessage("order-service", "order-events", event.EventType, "produced", "error")
+		return err
+	}
+
+	appmetrics.ObserveKafkaMessage("order-service", "order-events", event.EventType, "produced", "success")
+	return nil
 }
 
 func (p *Producer) Close() error {
