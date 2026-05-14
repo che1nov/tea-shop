@@ -370,3 +370,44 @@ npm run dev
 - Prometheus: `http://localhost:9090`
 - Grafana: `http://localhost:3000` (admin/admin)
 - Jaeger: `http://localhost:16686`
+
+## CI/CD
+
+GitHub Actions настроены в `.github/workflows/`.
+
+CI запускается на `push` и `pull_request` в `main`:
+- Go unit tests по всем модулям.
+- PostgreSQL integration tests через `tests/integration/run.sh`.
+- Frontend build.
+- Docker build backend/frontend образов.
+- Проверка `docker compose -f docker-compose.yml -f docker-compose.prod.yml config`.
+
+CD запускается после успешного CI на `main` или вручную через `workflow_dispatch`.
+
+Для деплоя на VM нужно добавить GitHub Secrets:
+
+```text
+DEPLOY_HOST      # публичный IP или DNS VM
+DEPLOY_USER      # SSH user, например ubuntu
+DEPLOY_SSH_KEY   # private key для доступа на VM
+DEPLOY_PORT      # опционально, по умолчанию 22
+DEPLOY_PATH      # опционально, по умолчанию ~/tea-shop
+```
+
+На VM должен быть установлен Docker с Compose plugin. В директории деплоя должен быть `.env`, его можно создать из `.env.example`:
+
+```bash
+cp .env.example .env
+```
+
+Минимальный ручной деплой на VM:
+
+```bash
+bash scripts/deploy-vm.sh
+```
+
+Продовый compose:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+```

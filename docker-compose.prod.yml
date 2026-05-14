@@ -1,0 +1,155 @@
+services:
+  users-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVICE: users-service
+    environment:
+      DB_HOST: postgres-users
+      DB_PORT: "5432"
+      DB_USER: ${DB_USER:-user}
+      DB_PASSWORD: ${DB_PASSWORD:-password}
+      DB_NAME: users_db
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@example.com}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?ADMIN_PASSWORD is required}
+    ports:
+      - "9001:9001"
+    depends_on:
+      - postgres-users
+
+  goods-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVICE: goods-service
+    environment:
+      DB_HOST: postgres-goods
+      DB_PORT: "5432"
+      DB_USER: ${DB_USER:-user}
+      DB_PASSWORD: ${DB_PASSWORD:-password}
+      DB_NAME: goods_db
+    ports:
+      - "9002:9002"
+    depends_on:
+      - postgres-goods
+
+  payment-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVICE: payment-service
+    environment:
+      DB_HOST: postgres-payments
+      DB_PORT: "5432"
+      DB_USER: ${DB_USER:-user}
+      DB_PASSWORD: ${DB_PASSWORD:-password}
+      DB_NAME: payments_db
+    ports:
+      - "9004:9004"
+    depends_on:
+      - postgres-payments
+
+  delivery-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVICE: delivery-service
+    environment:
+      DB_HOST: postgres-delivery
+      DB_PORT: "5432"
+      DB_USER: ${DB_USER:-user}
+      DB_PASSWORD: ${DB_PASSWORD:-password}
+      DB_NAME: deliveries_db
+      PAYMENT_SERVICE: payment-service:8004
+    ports:
+      - "9005:9005"
+    depends_on:
+      - postgres-delivery
+      - payment-service
+
+  order-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVICE: order-service
+    environment:
+      DB_HOST: postgres-orders
+      DB_PORT: "5432"
+      DB_USER: ${DB_USER:-user}
+      DB_PASSWORD: ${DB_PASSWORD:-password}
+      DB_NAME: orders_db
+      KAFKA_BROKERS: kafka:29092
+      GOODS_SERVICE: goods-service:8002
+      PAYMENT_SERVICE: payment-service:8004
+      DELIVERY_SERVICE: delivery-service:8005
+      USER_SERVICE: users-service:8001
+    ports:
+      - "9003:9003"
+    depends_on:
+      - postgres-orders
+      - kafka
+      - goods-service
+      - payment-service
+      - delivery-service
+
+  notify-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVICE: notify-service
+    environment:
+      KAFKA_BROKERS: kafka:29092
+      KAFKA_GROUP: notify-service
+      EMAIL_FROM: ${EMAIL_FROM:-noreply@tea-shop.local}
+      EMAIL_PASSWORD: ${EMAIL_PASSWORD:-}
+    ports:
+      - "9006:9006"
+    depends_on:
+      - kafka
+
+  api-gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVICE: api-gateway
+    environment:
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+      USERS_SERVICE: users-service:8001
+      GOODS_SERVICE: goods-service:8002
+      ORDERS_SERVICE: order-service:8003
+      PAYMENTS_SERVICE: payment-service:8004
+      DELIVERY_SERVICE: delivery-service:8005
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost}
+    ports:
+      - "8080:8080"
+      - "9007:9007"
+    depends_on:
+      - users-service
+      - goods-service
+      - order-service
+      - payment-service
+      - delivery-service
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: ${VITE_API_URL:-/api/v1}
+    ports:
+      - "80:80"
+    depends_on:
+      - api-gateway
+
+  prometheus:
+    volumes:
+      - ./monitoring/prometheus.prod.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
